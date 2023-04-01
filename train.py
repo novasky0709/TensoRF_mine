@@ -122,7 +122,7 @@ def reconstruction(args):
     # tensorVM, renderer = init_parameters(args, train_dataset.scene_bbox.to(device), reso_list[0])
     aabb = train_dataset.scene_bbox.to(device)
     reso_cur = N_to_reso(args.N_voxel_init, aabb)
-    nSamples = min(args.nSamples, cal_n_samples(reso_cur,args.step_ratio))
+    nSamples = min(args.nSamples, cal_n_samples(reso_cur,args.step_ratio))#sqrt(128**2+128**2+128**2)/step(0.5)=443, nSample never more than 443 samples for one pixel
 
 
     if args.ckpt is not None:
@@ -188,7 +188,7 @@ def reconstruction(args):
 
         # loss
         total_loss = loss
-        if Ortho_reg_weight > 0:
+        if Ortho_reg_weight > 0: # not set ture in initial settings
             loss_reg = tensorf.vector_comp_diffs()
             total_loss += Ortho_reg_weight*loss_reg
             summary_writer.add_scalar('train/reg', loss_reg.detach().item(), global_step=iteration)
@@ -197,12 +197,12 @@ def reconstruction(args):
             total_loss += L1_reg_weight*loss_reg_L1
             summary_writer.add_scalar('train/reg_l1', loss_reg_L1.detach().item(), global_step=iteration)
 
-        if TV_weight_density>0:
+        if TV_weight_density>0: # not set ture in initial settings
             TV_weight_density *= lr_factor
             loss_tv = tensorf.TV_loss_density(tvreg) * TV_weight_density
             total_loss = total_loss + loss_tv
             summary_writer.add_scalar('train/reg_tv_density', loss_tv.detach().item(), global_step=iteration)
-        if TV_weight_app>0:
+        if TV_weight_app>0: # not set ture in initial settings
             TV_weight_app *= lr_factor
             loss_tv = tensorf.TV_loss_app(tvreg)*TV_weight_app
             total_loss = total_loss + loss_tv
@@ -241,9 +241,9 @@ def reconstruction(args):
 
 
         if iteration in update_AlphaMask_list:
-
-            if reso_cur[0] * reso_cur[1] * reso_cur[2]<256**3:# update volume resolution
-                reso_mask = reso_cur
+            reso_mask = reso_cur
+            # if reso_cur[0] * reso_cur[1] * reso_cur[2]<256**3:# update volume resolution
+            #     reso_mask = reso_cur
             new_aabb = tensorf.updateAlphaMask(tuple(reso_mask))
             if iteration == update_AlphaMask_list[0]:
                 tensorf.shrink(new_aabb)

@@ -207,14 +207,15 @@ class TensorVMSplit(TensorBase):
         # plane + line basis
         coordinate_plane = torch.stack((xyz_sampled[..., self.matMode[0]], xyz_sampled[..., self.matMode[1]], xyz_sampled[..., self.matMode[2]])).detach().view(3, -1, 1, 2)
         coordinate_line = torch.stack((xyz_sampled[..., self.vecMode[0]], xyz_sampled[..., self.vecMode[1]], xyz_sampled[..., self.vecMode[2]]))
-        coordinate_line = torch.stack((torch.zeros_like(coordinate_line), coordinate_line), dim=-1).detach().view(3, -1, 1, 2)
+        coordinate_line = torch.stack((torch.zeros_like(coordinate_line), coordinate_line), dim=-1).detach().view(3, -1, 1, 2) #[3,986122,1,2] dim=-1 [0,x] first item is zero forever
 
         sigma_feature = torch.zeros((xyz_sampled.shape[0],), device=xyz_sampled.device)
         for idx_plane in range(len(self.density_plane)):
             plane_coef_point = F.grid_sample(self.density_plane[idx_plane], coordinate_plane[[idx_plane]],
-                                                align_corners=True).view(-1, *xyz_sampled.shape[:1])
+                                                align_corners=True).view(-1, *xyz_sampled.shape[:1])# [1,16,128,128],[1,986122,1,2]->[1,16,986122,1]->[16,986122]
             line_coef_point = F.grid_sample(self.density_line[idx_plane], coordinate_line[[idx_plane]],
-                                            align_corners=True).view(-1, *xyz_sampled.shape[:1])
+                                            align_corners=True).view(-1, *xyz_sampled.shape[:1])# ....->[16,986122]
+            # TODO: ReLU is not work? why not add a ReLU for the feature
             sigma_feature = sigma_feature + torch.sum(plane_coef_point * line_coef_point, dim=0)
 
         return sigma_feature
@@ -234,7 +235,6 @@ class TensorVMSplit(TensorBase):
             line_coef_point.append(F.grid_sample(self.app_line[idx_plane], coordinate_line[[idx_plane]],
                                             align_corners=True).view(-1, *xyz_sampled.shape[:1]))
         plane_coef_point, line_coef_point = torch.cat(plane_coef_point), torch.cat(line_coef_point)
-
 
         return self.basis_mat((plane_coef_point * line_coef_point).T)
 

@@ -283,9 +283,9 @@ class TensorBase(torch.nn.Module):
         rate_b = (self.aabb[0] - rays_o) / vec
         t_min = torch.minimum(rate_a, rate_b).amax(-1).clamp(min=near, max=far)
 
-        rng = torch.arange(N_samples)[None].float()
+        rng = torch.arange(N_samples)[None].float() # [1,N_samples]:[0,1,2,3,4,5,6,.....,N_samples-1]
         if is_train:
-            rng = rng.repeat(rays_d.shape[-2],1)
+            rng = rng.repeat(rays_d.shape[-2],1) # [2048,1147] : [N_pixel_sample_per_image,N_point_sample_per_ray]
             rng += torch.rand_like(rng[:,[0]])
         step = stepsize * rng.to(rays_o.device)
         interpx = (t_min[...,None] + step)
@@ -445,7 +445,7 @@ class TensorBase(torch.nn.Module):
         app_mask = weight > self.rayMarch_weight_thres
 
         if app_mask.any():
-            app_features = self.compute_appfeature(xyz_sampled[app_mask])
+            app_features = self.compute_appfeature(xyz_sampled[app_mask]) # [n_ptr,27]
             valid_rgbs = self.renderModule(xyz_sampled[app_mask], viewdirs[app_mask], app_features)
             rgb[app_mask] = valid_rgbs
 
