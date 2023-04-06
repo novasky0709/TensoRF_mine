@@ -79,12 +79,44 @@ def render_test(args):
         os.makedirs(f'{logfolder}/{args.expname}/imgs_test_all', exist_ok=True)
         evaluation(test_dataset,tensorf, args, renderer, f'{logfolder}/{args.expname}/imgs_test_all/',
                                 N_vis=-1, N_samples=-1, white_bg = white_bg, ndc_ray=ndc_ray,device=device)
-
     if args.render_path:
         c2ws = test_dataset.render_path
         os.makedirs(f'{logfolder}/{args.expname}/imgs_path_all', exist_ok=True)
         evaluation_path(test_dataset,tensorf, c2ws, renderer, f'{logfolder}/{args.expname}/imgs_path_all/',
                                 N_vis=-1, N_samples=-1, white_bg = white_bg, ndc_ray=ndc_ray,device=device)
+
+
+@torch.no_grad()
+def render_test_rgbonly(args):
+    renderer = OctreeRender_trilinear_fast_rgbonly
+    # init dataset
+    dataset = dataset_dict[args.dataset_name]
+    test_dataset = dataset(args.datadir, split='test', downsample=args.downsample_train, is_stack=True)
+    white_bg = test_dataset.white_bg
+    ndc_ray = args.ndc_ray
+
+    if not os.path.exists(args.ckpt):
+        print('the ckpt path does not exists!!')
+        return
+
+    ckpt = torch.load(args.ckpt, map_location=device)
+    kwargs = ckpt['kwargs']
+    kwargs.update({'device': device})
+    # args.model_name = "TensorBaseRgbOnly"
+    tensorf = eval(args.model_name)(**kwargs)
+    tensorf.load(ckpt)
+
+    logfolder = os.path.dirname(args.ckpt)
+    if args.render_train:
+        raise NotImplementedError
+
+    if args.render_test:
+        os.makedirs(f'{logfolder}/{args.expname}/imgs_test_all_rgb', exist_ok=True)
+        evaluation_rgbonly(test_dataset,tensorf, args, renderer, f'{logfolder}/{args.expname}/imgs_test_all_rgb/',
+                                N_vis=-1, N_samples=-1, white_bg = white_bg, ndc_ray=ndc_ray,device=device)
+    if args.render_path:
+        raise NotImplementedError
+
 
 def reconstruction(args):
 
@@ -312,7 +344,10 @@ if __name__ == '__main__':
         export_mesh(args)
 
     if args.render_only and (args.render_test or args.render_path):
-        render_test(args)
+        if args.render_rgb_only:
+            render_test_rgbonly(args)
+        else:
+            render_test(args)
     else:
         reconstruction(args)
 

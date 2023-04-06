@@ -20,7 +20,7 @@ def config_parser(cmd=None):
     parser.add_argument('--downsample_test', type=float, default=1.0)
 
     parser.add_argument('--model_name', type=str, default='TensorVMSplit',
-                        choices=['TensorVMSplit', 'TensorCP'])
+                        choices=['TensorVMSplit', 'TensorCP','TensorVMSplitRgbOnly'])
 
     # loader options
     parser.add_argument("--batch_size", type=int, default=4096)
@@ -88,6 +88,7 @@ def config_parser(cmd=None):
                         help='specific weights npy file to reload for coarse network')
     parser.add_argument("--render_only", type=int, default=0)
     parser.add_argument("--render_test", type=int, default=0)
+    parser.add_argument("--render_rgb_only", type=int, default=1)
     parser.add_argument("--render_train", type=int, default=0)
     parser.add_argument("--render_path", type=int, default=0)
     parser.add_argument("--export_mesh", type=int, default=0)
@@ -101,8 +102,8 @@ def config_parser(cmd=None):
     parser.add_argument("--fea2denseAct", type=str, default='softplus')
     parser.add_argument('--ndc_ray', type=int, default=0)
     parser.add_argument('--nSamples', type=int, default=1e6,
-                        help='sample point each ray, pass 1e6 if automatic adjust')
-    parser.add_argument('--step_ratio',type=float,default=0.5)
+                        help='default 1e6,sample point each ray, pass 1e6 if automatic adjust')
+    parser.add_argument('--step_ratio',type=float,default=0.5,help='default:0.5')
 
 
     ## blender flags
@@ -128,6 +129,10 @@ def config_parser(cmd=None):
                         help='N images to vis')
     parser.add_argument("--vis_every", type=int, default=10000,
                         help='frequency of visualize the image')
+    parser.add_argument("--statistic_time_consuming", action='store_true',
+                        help='statistic time consuming for each part then evaluation')
+    parser.add_argument('--distill_model_name', type=str, default='TensorCP',
+                        choices=['TensorVMSplit', 'TensorCP',])
     if cmd is not None:
         return parser.parse_args(cmd)
     else:

@@ -3,7 +3,7 @@ dataset_name = blender
 datadir = /home/yuze/devdata/project/dataset/nerf_synthetic/lego
 expname =  tensorf_lego_VM
 basedir = ./log
-
+ckpt = ./log/tensorf_lego_VM/tensorf_lego_VM.th
 n_iters = 30000
 batch_size = 4096
 
