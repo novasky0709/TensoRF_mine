@@ -84,9 +84,6 @@ def evaluation(test_dataset,tensorf, args, renderer, savePath=None, N_vis=5, prt
 
     imageio.mimwrite(f'{savePath}/{prtx}video.mp4', np.stack(rgb_maps), fps=30, quality=10)
     imageio.mimwrite(f'{savePath}/{prtx}depthvideo.mp4', np.stack(depth_maps), fps=30, quality=10)
-    with open(f'{savePath}/{prtx}statistic_time.txt',"w") as f:
-        for key in tensorf.time_statistic_dict:
-            f.write("{} {}\n".format(key,tensorf.time_statistic_dict[key]/len(rgb_maps)))
 
     if PSNRs:
         psnr = np.mean(np.asarray(PSNRs))

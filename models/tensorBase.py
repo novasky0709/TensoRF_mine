@@ -167,7 +167,7 @@ class TensorBase(torch.nn.Module):
         self.shadingMode, self.pos_pe, self.view_pe, self.fea_pe, self.featureC = shadingMode, pos_pe, view_pe, fea_pe, featureC
         self.init_render_func(shadingMode, pos_pe, view_pe, fea_pe, featureC, device)
 
-        self.time_statistic_dict = {'sample_xyz':0.0,'sample_mask':0.0,'cauc_density':0.0,'cauc_radiance':0.0,'volume_rendering':0.0,'total_time':0.0}
+        # self.time_statistic_dict = {'sample_xyz':0.0,'sample_mask':0.0,'cauc_density':0.0,'cauc_radiance':0.0,'volume_rendering':0.0,'total_time':0.0}
     def init_render_func(self, shadingMode, pos_pe, view_pe, fea_pe, featureC, device):
         if shadingMode == 'MLP_PE':
             self.renderModule = MLPRender_PE(self.app_dim, view_pe, pos_pe, featureC).to(device)
@@ -419,9 +419,7 @@ class TensorBase(torch.nn.Module):
             dists = torch.cat((z_vals[:, 1:] - z_vals[:, :-1], torch.zeros_like(z_vals[:, :1])), dim=-1)
         viewdirs = viewdirs.view(-1, 1, 3).expand(xyz_sampled.shape)
 
-        time_recorder = datetime.now()
-        self.time_statistic_dict["sample_xyz"] += (time_recorder - time_stater).microseconds/10e6
-        time_stater = datetime.now()
+
 
         if self.alphaMask is not None:
             alphas = self.alphaMask.sample_alpha(xyz_sampled[ray_valid])
@@ -433,10 +431,6 @@ class TensorBase(torch.nn.Module):
         sigma = torch.zeros(xyz_sampled.shape[:-1], device=xyz_sampled.device)
         rgb = torch.zeros((*xyz_sampled.shape[:2], 3), device=xyz_sampled.device)
 
-
-        time_recorder = datetime.now()
-        self.time_statistic_dict["sample_mask"] += (time_recorder - time_stater).microseconds/10e6
-        time_stater = datetime.now()
         if ray_valid.any():
             xyz_sampled = self.normalize_coord(xyz_sampled)
             sigma_feature = self.compute_densityfeature(xyz_sampled[ray_valid])
@@ -447,10 +441,6 @@ class TensorBase(torch.nn.Module):
 
         alpha, weight, bg_weight = raw2alpha(sigma, dists * self.distance_scale)
 
-        time_recorder = datetime.now()
-        self.time_statistic_dict["cauc_density"] += (time_recorder - time_stater).microseconds/10e6
-        time_stater = datetime.now()
-
         app_mask = weight > self.rayMarch_weight_thres
 
         if app_mask.any():
@@ -458,9 +448,6 @@ class TensorBase(torch.nn.Module):
             valid_rgbs = self.renderModule(xyz_sampled[app_mask], viewdirs[app_mask], app_features)
             rgb[app_mask] = valid_rgbs
 
-        time_recorder = datetime.now()
-        self.time_statistic_dict["cauc_radiance"] += (time_recorder - time_stater).microseconds/10e6
-        time_stater = datetime.now()
 
         acc_map = torch.sum(weight, -1)
         rgb_map = torch.sum(weight[..., None] * rgb, -2)
@@ -475,9 +462,6 @@ class TensorBase(torch.nn.Module):
             depth_map = torch.sum(weight * z_vals, -1)
             depth_map = depth_map + (1. - acc_map) * rays_chunk[..., -1]
 
-        time_recorder = datetime.now()
-        self.time_statistic_dict["volume_rendering"] += (time_recorder - time_stater).microseconds/10e6
-        time_stater = datetime.now()
 
         return rgb_map, depth_map # rgb, sigma, alpha, weight, bg_weight
 
