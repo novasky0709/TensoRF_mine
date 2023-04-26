@@ -436,7 +436,7 @@ class TensorCP(TensorBase):
 class TensorVMSplitRgbOnly(TensorVMSplit):
         def __init__(self, aabb, gridSize, device, **kargs):
             super(TensorVMSplit, self).__init__(aabb, gridSize, device, **kargs)
-
+            self.time_statistic_dict = {'sample_xyz':0.0,'sample_mask':0.0,'cauc_density':0.0,'cauc_radiance':0.0,'volume_rendering':0.0,'total_time':0.0}
         def forward(self, rays_chunk, white_bg=True, is_train=False, ndc_ray=False, N_samples=-1):
             # sta time
             time_total_start = time.time()

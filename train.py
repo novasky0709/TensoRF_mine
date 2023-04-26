@@ -89,6 +89,7 @@ def render_test(args):
 @torch.no_grad()
 def render_test_rgbonly(args):
     renderer = OctreeRender_trilinear_fast_rgbonly
+    args.model_name = "TensorVMSplitRgbOnly"
     # init dataset
     dataset = dataset_dict[args.dataset_name]
     test_dataset = dataset(args.datadir, split='test', downsample=args.downsample_train, is_stack=True)
@@ -130,7 +131,7 @@ def reconstruction(args):
 
     # init resolution
     upsamp_list = args.upsamp_list
-    update_AlphaMask_list = args.update_AlphaMask_list
+    update_AlphaMask_list = args.update_AlphaMask_list if args.update_AlphaMask_list is not None else []
     n_lamb_sigma = args.n_lamb_sigma
     n_lamb_sh = args.n_lamb_sh
 
@@ -151,7 +152,6 @@ def reconstruction(args):
 
 
     # init parameters
-    # tensorVM, renderer = init_parameters(args, train_dataset.scene_bbox.to(device), reso_list[0])
     aabb = train_dataset.scene_bbox.to(device)
     reso_cur = N_to_reso(args.N_voxel_init, aabb)
     nSamples = min(args.nSamples, cal_n_samples(reso_cur,args.step_ratio))#sqrt(128**2+128**2+128**2)/step(0.5)=443, nSample never more than 443 samples for one pixel

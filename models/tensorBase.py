@@ -440,7 +440,8 @@ class TensorBase(torch.nn.Module):
 
 
         alpha, weight, bg_weight = raw2alpha(sigma, dists * self.distance_scale)
-
+        self.dists = dists
+        self.z_vals = z_vals
         app_mask = weight > self.rayMarch_weight_thres
 
         if app_mask.any():
@@ -463,5 +464,5 @@ class TensorBase(torch.nn.Module):
             depth_map = depth_map + (1. - acc_map) * rays_chunk[..., -1]
 
 
-        return rgb_map, depth_map # rgb, sigma, alpha, weight, bg_weight
+        return rgb_map, depth_map , rgb, sigma, alpha, weight, bg_weight
 

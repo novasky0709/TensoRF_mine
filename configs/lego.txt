@@ -3,14 +3,14 @@ dataset_name = blender
 datadir = /home/yuze/devdata/project/dataset/nerf_synthetic/lego
 expname =  tensorf_lego_VM
 basedir = ./log
-ckpt = ./log/tensorf_lego_VM/tensorf_lego_VM.th
+# ckpt = ./log/tensorf_lego_VM/tensorf_lego_VM.th
 n_iters = 30000
 batch_size = 4096
 
 N_voxel_init = 2097156 # 128**3
 N_voxel_final = 27000000 # 300**3
 upsamp_list = [2000,3000,4000,5500,7000]
-update_AlphaMask_list = [2000,4000]
+update_AlphaMask_list = []
 
 N_vis = 5
 vis_every = 10000

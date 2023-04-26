@@ -25,7 +25,7 @@ def config_parser(cmd=None):
     # loader options
     parser.add_argument("--batch_size", type=int, default=4096)
     parser.add_argument("--n_iters", type=int, default=30000)
-
+    parser.add_argument("--m_n_iters", type=int, default=30000)
     parser.add_argument('--dataset_name', type=str, default='blender',
                         choices=['blender', 'llff', 'nsvf', 'dtu','tankstemple', 'own_data','qdd'])
 
@@ -64,7 +64,7 @@ def config_parser(cmd=None):
     parser.add_argument("--rm_weight_mask_thre", type=float, default=0.0001,
                         help='mask points in ray marching')
     parser.add_argument("--alpha_mask_thre", type=float, default=0.0001,
-                        help='threshold for creating alpha mask volume')
+                        help='threshold for creating alpha mask volume 0.0001')
     parser.add_argument("--distance_scale", type=float, default=25,
                         help='scaling sampling distance for computation')
     parser.add_argument("--density_shift", type=float, default=-10,
@@ -133,7 +133,43 @@ def config_parser(cmd=None):
                         help='statistic time consuming for each part then evaluation')
     parser.add_argument('--distill_model_name', type=str, default='TensorCP',
                         choices=['TensorVMSplit', 'TensorCP',])
+    parser.add_argument('--morph',
+                        type=int,
+                        default=0,help='0 : do not morph; 1 :default morphing func')
+    parser.add_argument("--morph_src_ckpt", type=str,
+                        help='morph source checkpoint')
+    parser.add_argument("--morph_dst_ckpt", type=str,
+                        help='morph destination checkpoint')
+    parser.add_argument("--morph_model_name", type=str,default='PiggyBackTensorVMSplit',
+                        help='morph model name')
+    parser.add_argument('--m_nn_density_D',
+                        type=int,
+                        default=256)
+    parser.add_argument('--m_nn_density_W',
+                        type=int,
+                        default=8)
+    parser.add_argument('--m_nn_app_D',
+                        type=int,
+                        default=256)
+    parser.add_argument('--m_nn_app_W',
+                        type=int,
+                        default=8)
+    parser.add_argument('--m_nn_density_pe',
+                        type=int,
+                        default=6)
+    parser.add_argument('--m_nn_app_pe',
+                        type=int,
+                        default=6)
+    parser.add_argument("--m_lr_basis", type=float, default=1e-3,
+                        help='morph learning rate')
+    parser.add_argument("--m_lr_decay_iters", type=int, default=-1,
+                        help = 'number of iterations the lr will decay to the target ratio; -1 will set it to n_iters')
+    parser.add_argument("--m_lr_decay_target_ratio", type=float, default=0.1,
+                        help='the target decay ratio; after decay_iters inital lr decays to lr*ratio')
+    parser.add_argument("--m_vis_every", type=int, default=-1,
+                        help='N images to vis')
     if cmd is not None:
         return parser.parse_args(cmd)
     else:
         return parser.parse_args()
+
