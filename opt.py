@@ -132,7 +132,7 @@ def config_parser(cmd=None):
     parser.add_argument("--statistic_time_consuming", action='store_true',
                         help='statistic time consuming for each part then evaluation')
     parser.add_argument("--stu_model_name", type=str, default='VanillaNeRF')
-    parser.add_argument("--dis_lr_init", type=float, default=0.001,
+    parser.add_argument("--dis_lr_init", type=float, default=8e-5,
                         help='learning rate')
     parser.add_argument("--dis_lr_decay_iters", type=int, default=-1,
                         help = 'number of iterations the lr will decay to the target ratio; -1 will set it to n_iters')
@@ -143,13 +143,13 @@ def config_parser(cmd=None):
     parser.add_argument("--dis_batch_size", type=int, default=1024)
     parser.add_argument("--dis_start_appfeatloss_iter", type=int, default=0,help='-1: never start')
     parser.add_argument("--dis_end_appfeatloss_iter", type=int, default=-1, help='-1: never stop')
-    parser.add_argument("--dis_appfeatloss_weight", type=int, default=0.001)
+    parser.add_argument("--dis_appfeatloss_weight", type=int, default=1)
     parser.add_argument("--dis_start_rfloss_iter", type=int, default=-1,help='-1: never start')
     parser.add_argument("--dis_end_rfloss_iter", type=int, default=-1, help='-1: never stop')
-    parser.add_argument("--dis_rfloss_weight", type=int, default=0.001)
+    parser.add_argument("--dis_rfloss_weight", type=int, default=1)
     parser.add_argument("--dis_start_ftloss_iter", type=int, default=-1,help='-1: never start')
     parser.add_argument("--dis_end_ftloss_iter", type=int, default=-1,help='-1: never stop')
-    parser.add_argument("--dis_ftloss_weight", type=int, default=0.001)
+    parser.add_argument("--dis_ftloss_weight", type=int, default=1)
     if cmd is not None:
         return parser.parse_args(cmd)
     else:

@@ -1,0 +1,45 @@
+
+dataset_name = blender
+datadir = /home/yuze/devdata/project/dataset/nerf_synthetic/lego
+expname =  tensorf_lego_dis_debug
+basedir = ./log
+ckpt =./log/tensorf_lego_dis_debug/tensorf_lego_VM.th
+n_iters = 30000
+N_voxel_init = 2097156 # 128**3
+N_voxel_final = 27000000 # 300**3
+upsamp_list = [2000,3000,4000,5500,7000]
+update_AlphaMask_list = [2000,4000]
+
+N_vis = 5
+vis_every = 10000
+
+render_test = 1
+
+n_lamb_sigma = [16,16,16]
+n_lamb_sh = [48,48,48]
+model_name = TensorVMSplit
+
+
+shadingMode = MLP_Fea
+fea2denseAct = softplus
+
+view_pe = 2
+fea_pe = 2
+
+L1_weight_inital = 8e-5
+L1_weight_rest = 4e-5
+rm_weight_mask_thre = 1e-4
+
+dis_lr_init = 8e-5
+dis_n_iters = 30000
+batch_size = 2048
+dis_batch_size = 512
+dis_start_appfeatloss_iter = -1
+dis_end_appfeatloss_iter = -1
+dis_appfeatloss_weight = 1
+dis_start_rfloss_iter = -1
+dis_end_rfloss_iter = -1
+dis_rfloss_weight = 1
+dis_start_ftloss_iter = -1
+dis_end_ftloss_iter = -1
+dis_ftloss_weight = -1
