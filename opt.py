@@ -23,9 +23,9 @@ def config_parser(cmd=None):
                         choices=['TensorVMSplit', 'TensorCP','TensorVMSplitRgbOnly'])
 
     # loader options
-    parser.add_argument("--batch_size", type=int, default=4096)
+
     parser.add_argument("--n_iters", type=int, default=30000)
-    parser.add_argument("--m_n_iters", type=int, default=30000)
+
     parser.add_argument('--dataset_name', type=str, default='blender',
                         choices=['blender', 'llff', 'nsvf', 'dtu','tankstemple', 'own_data','qdd'])
 
@@ -131,43 +131,25 @@ def config_parser(cmd=None):
                         help='frequency of visualize the image')
     parser.add_argument("--statistic_time_consuming", action='store_true',
                         help='statistic time consuming for each part then evaluation')
-    parser.add_argument('--distill_model_name', type=str, default='TensorCP',
-                        choices=['TensorVMSplit', 'TensorCP',])
-    parser.add_argument('--morph',
-                        type=int,
-                        default=0,help='0 : do not morph; 1 :default morphing func')
-    parser.add_argument("--morph_src_ckpt", type=str,
-                        help='morph source checkpoint')
-    parser.add_argument("--morph_dst_ckpt", type=str,
-                        help='morph destination checkpoint')
-    parser.add_argument("--morph_model_name", type=str,default='PiggyBackTensorVMSplit',
-                        help='morph model name')
-    parser.add_argument('--m_nn_density_D',
-                        type=int,
-                        default=256)
-    parser.add_argument('--m_nn_density_W',
-                        type=int,
-                        default=8)
-    parser.add_argument('--m_nn_app_D',
-                        type=int,
-                        default=256)
-    parser.add_argument('--m_nn_app_W',
-                        type=int,
-                        default=8)
-    parser.add_argument('--m_nn_density_pe',
-                        type=int,
-                        default=6)
-    parser.add_argument('--m_nn_app_pe',
-                        type=int,
-                        default=6)
-    parser.add_argument("--m_lr_basis", type=float, default=1e-3,
-                        help='morph learning rate')
-    parser.add_argument("--m_lr_decay_iters", type=int, default=-1,
+    parser.add_argument("--stu_model_name", type=str, default='VanillaNeRF')
+    parser.add_argument("--dis_lr_init", type=float, default=0.001,
+                        help='learning rate')
+    parser.add_argument("--dis_lr_decay_iters", type=int, default=-1,
                         help = 'number of iterations the lr will decay to the target ratio; -1 will set it to n_iters')
-    parser.add_argument("--m_lr_decay_target_ratio", type=float, default=0.1,
+    parser.add_argument("--dis_lr_decay_target_ratio", type=float, default=0.1,
                         help='the target decay ratio; after decay_iters inital lr decays to lr*ratio')
-    parser.add_argument("--m_vis_every", type=int, default=-1,
-                        help='N images to vis')
+    parser.add_argument("--dis_n_iters", type=int, default=30000)
+    parser.add_argument("--batch_size", type=int, default=4096)
+    parser.add_argument("--dis_batch_size", type=int, default=1024)
+    parser.add_argument("--dis_start_appfeatloss_iter", type=int, default=0,help='-1: never start')
+    parser.add_argument("--dis_end_appfeatloss_iter", type=int, default=-1, help='-1: never stop')
+    parser.add_argument("--dis_appfeatloss_weight", type=int, default=0.001)
+    parser.add_argument("--dis_start_rfloss_iter", type=int, default=-1,help='-1: never start')
+    parser.add_argument("--dis_end_rfloss_iter", type=int, default=-1, help='-1: never stop')
+    parser.add_argument("--dis_rfloss_weight", type=int, default=0.001)
+    parser.add_argument("--dis_start_ftloss_iter", type=int, default=-1,help='-1: never start')
+    parser.add_argument("--dis_end_ftloss_iter", type=int, default=-1,help='-1: never stop')
+    parser.add_argument("--dis_ftloss_weight", type=int, default=0.001)
     if cmd is not None:
         return parser.parse_args(cmd)
     else:

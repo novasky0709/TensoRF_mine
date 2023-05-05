@@ -19,6 +19,56 @@ def OctreeRender_trilinear_fast(rays, tensorf, chunk=4096, N_samples=-1, ndc_ray
         depth_maps.append(depth_map)
     return torch.cat(rgbs), None, torch.cat(depth_maps), None, None
 
+
+def Distill_renderer(rays, tensorf, chunk=4096, N_samples=-1, ndc_ray=False, white_bg=True, is_train=False,
+                                device='cuda'):
+    rgb_maps, depth_maps, rgbs, sigmas, alphas, sigma_feats, app_feats = [],[],[],[],[],[],[]
+    xyz_sampled_arr, viewdir_arr, z_vals_arr, ray_valid_arr = [],[],[],[]
+    N_rays_all = rays.shape[0]
+    for chunk_idx in range(N_rays_all // chunk + int(N_rays_all % chunk > 0)):
+        rays_chunk = rays[chunk_idx * chunk:(chunk_idx + 1) * chunk].to(device)
+
+        rgb_map, depth_map, rgb, sigma, alpha, weight, bg_weight, sigma_feat, app_feat, xyz_sampled, viewdir, z_vals, ray_valid = tensorf(rays_chunk, is_train=is_train, white_bg=white_bg, ndc_ray=ndc_ray,
+                                                    N_samples=N_samples)
+        xyz_sampled_arr.append(xyz_sampled)
+        viewdir_arr.append(viewdir)
+        z_vals_arr.append(z_vals)
+        ray_valid_arr.append(ray_valid)
+        rgb_maps.append(rgb_map)
+        depth_maps.append(depth_map)
+        rgbs.append(rgb)
+        sigmas.append(sigma)
+        alphas.append(alpha)
+        sigma_feats.append(sigma_feat)
+        app_feats.append(app_feat)
+    return torch.cat(rgb_maps), torch.cat(depth_maps), torch.cat(rgbs), torch.cat(sigmas), torch.cat(alphas), torch.cat(sigma_feats), torch.cat(app_feats), torch.cat(xyz_sampled_arr), torch.cat(viewdir_arr), torch.cat(z_vals_arr), torch.cat(ray_valid_arr)
+
+def Stu_vanilla_renderer(stu_model, rays_sampled, xyz_sampled, viewdir_sampled, z_vals, ray_valid, chunk, ndc_ray=False, white_bg=True, is_train=False,device='cuda:0'):
+    rgb_maps, depth_maps, rgbs, sigmas, alphas, sigma_feats, app_feats  = [], [], [], [], [], [], []
+    N_rays_all = xyz_sampled.shape[0]
+    for chunk_idx in range(N_rays_all // chunk + int(N_rays_all % chunk > 0)):
+        rays_chunk = rays_sampled[chunk_idx * chunk:(chunk_idx + 1) * chunk].to(device)
+        xyz_chunk = xyz_sampled[chunk_idx * chunk:(chunk_idx + 1) * chunk].to(device)
+        viewdir_chunk = viewdir_sampled[chunk_idx * chunk:(chunk_idx + 1) * chunk].to(device)
+        z_vals_chunk = z_vals[chunk_idx * chunk:(chunk_idx + 1) * chunk].to(device)
+        ray_valid_chunk = ray_valid[chunk_idx * chunk:(chunk_idx + 1) * chunk].to(device)
+
+        rgb_map, depth_map, rgb, sigma, alpha, weight, bg_weight, sigma_feat, app_feat = stu_model(rays_chunk, xyz_chunk, viewdir_chunk, z_vals_chunk, ray_valid_chunk,
+                                                                                                 is_train=is_train,
+                                                                                                 white_bg=white_bg,
+                                                                                                 ndc_ray=ndc_ray,
+                                                                                                 )
+
+        rgb_maps.append(rgb_map)
+        depth_maps.append(depth_map)
+        rgbs.append(rgb)
+        sigmas.append(sigma)
+        alphas.append(alpha)
+        # sigma_feats.append(sigma_feat)
+        app_feats.append(app_feat)
+    return torch.cat(rgb_maps), torch.cat(depth_maps), torch.cat(rgbs), torch.cat(sigmas), torch.cat(alphas), None, torch.cat(app_feats)
+
+
 def OctreeRender_trilinear_fast_rgbonly(rays, tensorf, chunk=4096, N_samples=-1, ndc_ray=False, white_bg=True, is_train=False, device='cuda'):
     rgbs, alphas, depth_maps, weights, uncertainties = [], [], [], [], []
     N_rays_all = rays.shape[0]

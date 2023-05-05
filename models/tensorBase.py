@@ -440,8 +440,8 @@ class TensorBase(torch.nn.Module):
 
 
         alpha, weight, bg_weight = raw2alpha(sigma, dists * self.distance_scale)
-        self.dists = dists
-        self.z_vals = z_vals
+        # self.dists = dists
+        # self.z_vals = z_vals
         app_mask = weight > self.rayMarch_weight_thres
 
         if app_mask.any():
