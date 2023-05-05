@@ -121,7 +121,7 @@ def distill(args):
     # init loss
     # Ortho_reg_weight = args.Ortho_weight
     # print("initial Ortho_reg_weight", Ortho_reg_weight)
-    #
+    #1
     # L1_reg_weight = args.L1_weight_inital
     # print("initial L1_reg_weight", L1_reg_weight)
     # TV_weight_density, TV_weight_app = args.TV_weight_density, args.TV_weight_app
