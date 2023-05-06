@@ -19,7 +19,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 tea_renderer = Distill_renderer
 stu_renderer = Stu_vanilla_renderer
-
+stu_renderer_test = Stu_vanilla_renderer_test
 class SimpleSampler:
     def __init__(self, total, batch):
         self.total = total
@@ -35,6 +35,72 @@ class SimpleSampler:
         return self.ids[self.curr:self.curr + self.batch]
 
 
+@torch.no_grad()
+def evaluation_student_model(test_dataset,stu_model, args, stu_renderer, savePath=None, N_vis=5, prtx='', N_samples=-1,
+               white_bg=False, ndc_ray=False, compute_extra_metrics=True, device='cuda'):
+
+    PSNRs, rgb_maps, depth_maps = [], [], []
+    ssims,l_alex,l_vgg=[],[],[]
+    os.makedirs(savePath, exist_ok=True)
+    os.makedirs(savePath+"/rgbd", exist_ok=True)
+
+    try:
+        tqdm._instances.clear()
+    except Exception:
+        pass
+
+    near_far = test_dataset.near_far
+    img_eval_interval = 1 if N_vis < 0 else max(test_dataset.all_rays.shape[0] // N_vis,1)
+    idxs = list(range(0, test_dataset.all_rays.shape[0], img_eval_interval))
+    for idx, samples in tqdm(enumerate(test_dataset.all_rays[0::img_eval_interval]), file=sys.stdout):
+
+        W, H = test_dataset.img_wh
+        rays = samples.view(-1,samples.shape[-1])
+
+        rgb_map, _, depth_map, _, _ = stu_renderer(rays, stu_model, chunk=2048, N_samples=N_samples,
+                                        ndc_ray=ndc_ray, white_bg = white_bg, device=device)
+        rgb_map = rgb_map.clamp(0.0, 1.0)
+
+        rgb_map, depth_map = rgb_map.reshape(H, W, 3).cpu(), depth_map.reshape(H, W).cpu()
+
+        depth_map, _ = visualize_depth_numpy(depth_map.numpy(),near_far)
+        if len(test_dataset.all_rgbs):
+            gt_rgb = test_dataset.all_rgbs[idxs[idx]].view(H, W, 3)
+            loss = torch.mean((rgb_map - gt_rgb) ** 2)
+            PSNRs.append(-10.0 * np.log(loss.item()) / np.log(10.0))
+
+            if compute_extra_metrics:
+                ssim = rgb_ssim(rgb_map, gt_rgb, 1)
+                l_a = rgb_lpips(gt_rgb.numpy(), rgb_map.numpy(), 'alex', tensorf.device)
+                l_v = rgb_lpips(gt_rgb.numpy(), rgb_map.numpy(), 'vgg', tensorf.device)
+                ssims.append(ssim)
+                l_alex.append(l_a)
+                l_vgg.append(l_v)
+
+        rgb_map = (rgb_map.numpy() * 255).astype('uint8')
+        # rgb_map = np.concatenate((rgb_map, depth_map), axis=1)
+        rgb_maps.append(rgb_map)
+        depth_maps.append(depth_map)
+        if savePath is not None:
+            imageio.imwrite(f'{savePath}/{prtx}{idx:03d}.png', rgb_map)
+            rgb_map = np.concatenate((rgb_map, depth_map), axis=1)
+            imageio.imwrite(f'{savePath}/rgbd/{prtx}{idx:03d}.png', rgb_map)
+
+    imageio.mimwrite(f'{savePath}/{prtx}video.mp4', np.stack(rgb_maps), fps=30, quality=10)
+    imageio.mimwrite(f'{savePath}/{prtx}depthvideo.mp4', np.stack(depth_maps), fps=30, quality=10)
+
+    if PSNRs:
+        psnr = np.mean(np.asarray(PSNRs))
+        if compute_extra_metrics:
+            ssim = np.mean(np.asarray(ssims))
+            l_a = np.mean(np.asarray(l_alex))
+            l_v = np.mean(np.asarray(l_vgg))
+            np.savetxt(f'{savePath}/{prtx}mean.txt', np.asarray([psnr, ssim, l_a, l_v]))
+        else:
+            np.savetxt(f'{savePath}/{prtx}mean.txt', np.asarray([psnr]))
+
+
+    return PSNRs
 
 def distill(args):
     # init dataset
@@ -180,43 +246,14 @@ def distill(args):
             )
             PSNRs = []
 
-        # if iteration % args.vis_every == args.vis_every - 1 and args.N_vis != 0:
-        #     PSNRs_test = evaluation(test_dataset, tensorf, args, renderer, f'{logfolder}/imgs_vis/', N_vis=args.N_vis,
-        #                             prtx=f'{iteration:06d}_', N_samples=nSamples, white_bg=white_bg, ndc_ray=ndc_ray,
-        #                             compute_extra_metrics=False)
-        #     summary_writer.add_scalar('test/psnr', np.mean(PSNRs_test), global_step=iteration)
+        if iteration % args.dis_vis_every == args.vis_every and args.dis_N_vis != 0:
+            PSNRs_test = evaluation_student_model(test_dataset, stu_model, args, stu_renderer, f'{logfolder}/distill/imgs_vis/', N_vis=args.N_vis,
+                                    prtx=f'{iteration:06d}_', N_samples=nSamples, white_bg=white_bg, ndc_ray=ndc_ray,
+                                    compute_extra_metrics=False)
+            summary_writer.add_scalar('test/psnr', np.mean(PSNRs_test), global_step=iteration)
 
-        # if iteration in update_AlphaMask_list:
-        #     reso_mask = reso_cur
-        #     # if reso_cur[0] * reso_cur[1] * reso_cur[2]<256**3:# update volume resolution
-        #     #     reso_mask = reso_cur
-        #     new_aabb = tensorf.updateAlphaMask(tuple(reso_mask))
-        #     if iteration == update_AlphaMask_list[0]:
-        #         tensorf.shrink(new_aabb)
-        #         # tensorVM.alphaMask = None
-        #         L1_reg_weight = args.L1_weight_rest
-        #         print("continuing L1_reg_weight", L1_reg_weight)
-        #
-        #     if not args.ndc_ray and iteration == update_AlphaMask_list[1]:
-        #         # filter rays outside the bbox
-        #         allrays, allrgbs = tensorf.filtering_rays(allrays, allrgbs)
-        #         trainingSampler = SimpleSampler(allrgbs.shape[0], args.batch_size)
-        #
-        # if iteration in upsamp_list:
-        #     n_voxels = N_voxel_list.pop(0)
-        #     reso_cur = N_to_reso(n_voxels, tensorf.aabb)
-        #     nSamples = min(args.nSamples, cal_n_samples(reso_cur, args.step_ratio))
-        #     tensorf.upsample_volume_grid(reso_cur)
+    torch.save(stu_model, f'{logfolder}/distill_{args.expname}.th')
 
-            # if args.lr_upsample_reset:
-            #     print("reset lr to initial")
-            #     lr_scale = 1  # 0.1 ** (iteration / args.n_iters)
-            # else:
-            #     lr_scale = args.lr_decay_target_ratio ** (iteration / args.n_iters)
-            # grad_vars = tensorf.get_optparam_groups(args.lr_init * lr_scale, args.lr_basis * lr_scale)
-            # optimizer = torch.optim.Adam(grad_vars, betas=(0.9, 0.99))
-
-    stu_model.save(f'{logfolder}/distill_{args.expname}.th')
 
     # if args.render_train:
     #     os.makedirs(f'{logfolder}/imgs_train_all', exist_ok=True)
@@ -231,14 +268,7 @@ def distill(args):
     #                             N_vis=-1, N_samples=-1, white_bg=white_bg, ndc_ray=ndc_ray, device=device)
     #     summary_writer.add_scalar('test/psnr_all', np.mean(PSNRs_test), global_step=iteration)
     #     print(f'======> {args.expname} test all psnr: {np.mean(PSNRs_test)} <========================')
-    #
-    # if args.render_path:
-    #     c2ws = test_dataset.render_path
-    #     # c2ws = test_dataset.poses
-    #     print('========>', c2ws.shape)
-    #     os.makedirs(f'{logfolder}/imgs_path_all', exist_ok=True)
-    #     evaluation_path(test_dataset, tensorf, c2ws, renderer, f'{logfolder}/imgs_path_all/',
-    #                     N_vis=-1, N_samples=-1, white_bg=white_bg, ndc_ray=ndc_ray, device=device)
+
 if __name__ == '__main__':
 
     torch.set_default_dtype(torch.float32)

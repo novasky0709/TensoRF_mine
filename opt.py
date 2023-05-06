@@ -150,6 +150,10 @@ def config_parser(cmd=None):
     parser.add_argument("--dis_start_ftloss_iter", type=int, default=-1,help='-1: never start')
     parser.add_argument("--dis_end_ftloss_iter", type=int, default=-1,help='-1: never stop')
     parser.add_argument("--dis_ftloss_weight", type=int, default=1)
+    parser.add_argument("--dis_vis_every", type=int, default=10000,
+                        help='frequency of visualize the image')
+    parser.add_argument("--dis_N_vis", type=int, default=5,
+                        help='N images to vis')
     if cmd is not None:
         return parser.parse_args(cmd)
     else:
