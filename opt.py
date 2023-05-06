@@ -154,6 +154,10 @@ def config_parser(cmd=None):
                         help='frequency of visualize the image')
     parser.add_argument("--dis_N_vis", type=int, default=5,
                         help='N images to vis')
+    parser.add_argument("--student_ckpt", type=str, default=None,
+                        help='specific weights npy file to reload for coarse network')
+    parser.add_argument("--dis_render_test", type=int, default=1)
+    parser.add_argument("--dis_render_train", type=int, default=0)
     if cmd is not None:
         return parser.parse_args(cmd)
     else:

@@ -135,7 +135,7 @@ def distill(args):
     nSamples = min(args.nSamples, cal_n_samples(reso_cur,
                                                 args.step_ratio))  # sqrt(128**2+128**2+128**2)/step(0.5)=443, nSample never more than 443 samples for one pixel
 
-    if not os.path.exists(args.ckpt):
+    if args.ckpt is not None and not os.path.exists(args.ckpt):
         print('the ckpt path does not exists!! Distill must from a ckpt')
         return
     ckpt = torch.load(args.ckpt, map_location=device)
@@ -143,10 +143,17 @@ def distill(args):
     kwargs.update({'device': device})
     tensorf_tea = eval(args.model_name+"_Distill")(**kwargs)
     tensorf_tea.load(ckpt)
-    stu_args = {'distance_scale':args.distance_scale,'rayMarch_weight_thres':args.rm_weight_mask_thre,\
+    if args.student_ckpt is not None :
+        if not os.path.exists(args.student_ckpt):
+            print('the student ckpt path does not exists!! ')
+            return
+        stu_ckpt = torch.load(args.student_ckpt, map_location=device)
+        stu_args = stu_ckpt['kwargs']
+        stu_args.update({'device': device})
+    else:
+        print('Distill the student model from scratch!!!!')
+        stu_args = {'distance_scale':args.distance_scale,'rayMarch_weight_thres':args.rm_weight_mask_thre,\
                 'aabb':aabb,'gridSize':reso_cur,'near_far' : near_far,'density_shift':args.density_shift,'step_ratio':args.step_ratio}
-
-
     stu_model = eval(args.stu_model_name)(**stu_args)
 
     grad_vars = stu_model.get_optparam_groups(args.dis_lr_init)
@@ -185,96 +192,90 @@ def distill(args):
     if not args.ndc_ray:
         allrays, allrgbs = tensorf_tea.filtering_rays(allrays, allrgbs, bbox_only=True)
     trainingSampler = SimpleSampler(allrays.shape[0], args.batch_size)
-    # init loss
-    # Ortho_reg_weight = args.Ortho_weight
-    # print("initial Ortho_reg_weight", Ortho_reg_weight)
-    #1
-    # L1_reg_weight = args.L1_weight_inital
-    # print("initial L1_reg_weight", L1_reg_weight)
-    # TV_weight_density, TV_weight_app = args.TV_weight_density, args.TV_weight_app
-    # tvreg = TVLoss()
-    # print(f"initial TV_weight density: {TV_weight_density} appearance: {TV_weight_app}")
+
 
     pbar = tqdm(range(args.dis_n_iters), miniters=args.progress_refresh_rate, file=sys.stdout)
-    for iteration in pbar:
-
-        ray_idx = trainingSampler.nextids()
-        rays_train, rgb_train = allrays[ray_idx], allrgbs[ray_idx].to(device)
-
-        # data example:
-        # rays_train [4096,6], rgb_train [4096,3], rgb_maps [4096,3] depth_maps [4096]
-        with torch.no_grad():
-            tea_rgb_maps, tea_depth_maps, tea_rgbs, tea_sigmas, tea_alphas, tea_density_feats, tea_app_feats, xyz_sampled,viewdirs , z_vals, ray_valid  = tea_renderer(rays_train, tensorf_tea, chunk=args.batch_size,
-                                                                            N_samples=nSamples, white_bg=white_bg,
-                                                                            ndc_ray=ndc_ray, device=device, is_train=False)
-            #e.g. rgb_maps [4096,3];depth_maps [4096]; rgbs [4096,443,3]; sigmas,alphas: [4096,443]
-            # app_feats [19817,27]->youwenti xyz_sampled [4096,443,3]; z_vals [4096,443]; ray_valid [4096,443]
-        stu_rgb_maps, stu_depth_maps, stu_rgbs, stu_sigmas, stu_alphas, _, stu_app_feats = stu_renderer(stu_model, rays_train, xyz_sampled, viewdirs, z_vals, ray_valid,  chunk=args.dis_batch_size,  ndc_ray=ndc_ray, white_bg = white_bg, is_train=True, device = device)
-
-        # loss
-        total_loss = 0
-        # cauculate loss
-        if (iteration + 1 > loss_hyperparam['dis_start_appfeatloss_iter']) and  (iteration + 1 < loss_hyperparam['dis_end_appfeatloss_iter']):
-            assert(tea_app_feats.shape == stu_app_feats.shape),'app_feat size dont match between student and teacher'
-            appfeatloss = loss_hyperparam['dis_appfeatloss_weight'] * torch.mean((tea_app_feats - stu_app_feats)**2)
-            total_loss += appfeatloss
-            summary_writer.add_scalar('train/appfeatloss', appfeatloss.detach().item(), global_step=iteration)
-        if (iteration + 1 > loss_hyperparam['dis_start_rfloss_iter']) and  (iteration + 1 < loss_hyperparam['dis_end_rfloss_iter']):
-            assert (tea_sigmas.shape == stu_sigmas.shape) and (tea_rgbs.shape == stu_rgbs.shape), 'app_feat size dont match between student and teacher'
-            rfloss = loss_hyperparam['dis_rfloss_weight'] * (torch.mean((tea_sigmas - stu_sigmas) ** 2) + torch.mean((tea_rgbs - stu_rgbs) ** 2))
-            total_loss += rfloss
-            summary_writer.add_scalar('train/rfloss', rfloss.detach().item(), global_step=iteration)
-        if (iteration + 1 > loss_hyperparam['dis_start_ftloss_iter']) and  (iteration + 1 < loss_hyperparam['dis_end_ftloss_iter']):
-            assert (tea_rgb_maps.shape == stu_rgb_maps.shape), 'app_feat size dont match between student and teacher'
-            ftloss = loss_hyperparam['dis_ftloss_weight'] * torch.mean((stu_rgb_maps - tea_rgb_maps) ** 2)
-            total_loss += ftloss
-            summary_writer.add_scalar('train/ftloss', ftloss.detach().item(), global_step=iteration)
-        summary_writer.add_scalar('train/total_loss', total_loss.detach().item(), global_step=iteration)
-        optimizer.zero_grad()
-        total_loss.backward()
-        optimizer.step()
-
-        mse = torch.mean((stu_rgb_maps - tea_rgb_maps) ** 2).detach().item()
-
-        PSNRs.append(-10.0 * np.log(mse) / np.log(10.0))
-        summary_writer.add_scalar('train/PSNR', PSNRs[-1], global_step=iteration)
-        summary_writer.add_scalar('train/mse', mse, global_step=iteration)
-
-        for param_group in optimizer.param_groups:
-            param_group['lr'] = param_group['lr'] * lr_factor
-
-        # Print the current values of the losses.
-        if iteration % args.progress_refresh_rate == 0:
-            pbar.set_description(
-                f'Iteration {iteration:05d}:'
-                + f' train_psnr = {float(np.mean(PSNRs)):.2f}'
-                + f' test_psnr = {float(np.mean(PSNRs_test)):.2f}'
-                + f' mse = {mse:.6f}'
-            )
-            PSNRs = []
-
-        if iteration % args.dis_vis_every == args.dis_vis_every - 1 and args.dis_N_vis != 0:
-            PSNRs_test = evaluation_student_model(test_dataset, stu_model, args, stu_renderer, f'{logfolder}/distill/imgs_vis/', N_vis=args.N_vis,
-                                    prtx=f'{iteration:06d}_', N_samples=nSamples, white_bg=white_bg, ndc_ray=ndc_ray,
-                                    compute_extra_metrics=False)
-            summary_writer.add_scalar('test/psnr', np.mean(PSNRs_test), global_step=iteration)
-
-    torch.save(stu_model, f'{logfolder}/distill_{args.expname}.th')
-
-
-    # if args.render_train:
-    #     os.makedirs(f'{logfolder}/imgs_train_all', exist_ok=True)
-    #     train_dataset = dataset(args.datadir, split='train', downsample=args.downsample_train, is_stack=True)
-    #     PSNRs_test = evaluation(train_dataset, tensorf, args, renderer, f'{logfolder}/imgs_train_all/',
-    #                             N_vis=-1, N_samples=-1, white_bg=white_bg, ndc_ray=ndc_ray, device=device)
-    #     print(f'======> {args.expname} test all psnr: {np.mean(PSNRs_test)} <========================')
+    # for iteration in pbar:
     #
-    # if args.render_test:
-    #     os.makedirs(f'{logfolder}/imgs_test_all', exist_ok=True)
-    #     PSNRs_test = evaluation(test_dataset, tensorf, args, renderer, f'{logfolder}/imgs_test_all/',
-    #                             N_vis=-1, N_samples=-1, white_bg=white_bg, ndc_ray=ndc_ray, device=device)
-    #     summary_writer.add_scalar('test/psnr_all', np.mean(PSNRs_test), global_step=iteration)
-    #     print(f'======> {args.expname} test all psnr: {np.mean(PSNRs_test)} <========================')
+    #     ray_idx = trainingSampler.nextids()
+    #     rays_train, rgb_train = allrays[ray_idx], allrgbs[ray_idx].to(device)
+    #
+    #     # data example:
+    #     # rays_train [4096,6], rgb_train [4096,3], rgb_maps [4096,3] depth_maps [4096]
+    #     with torch.no_grad():
+    #         tea_rgb_maps, tea_depth_maps, tea_rgbs, tea_sigmas, tea_alphas, tea_density_feats, tea_app_feats, xyz_sampled,viewdirs , z_vals, ray_valid  = tea_renderer(rays_train, tensorf_tea, chunk=args.batch_size,
+    #                                                                         N_samples=nSamples, white_bg=white_bg,
+    #                                                                         ndc_ray=ndc_ray, device=device, is_train=False)
+    #         #e.g. rgb_maps [4096,3];depth_maps [4096]; rgbs [4096,443,3]; sigmas,alphas: [4096,443]
+    #         # app_feats [19817,27]->youwenti xyz_sampled [4096,443,3]; z_vals [4096,443]; ray_valid [4096,443]
+    #     stu_rgb_maps, stu_depth_maps, stu_rgbs, stu_sigmas, stu_alphas, _, stu_app_feats = stu_renderer(stu_model, rays_train, xyz_sampled, viewdirs, z_vals, ray_valid,  chunk=args.dis_batch_size,  ndc_ray=ndc_ray, white_bg = white_bg, is_train=True, device = device)
+    #
+    #     # loss
+    #     total_loss = 0
+    #     # cauculate loss
+    #     if (iteration + 1 > loss_hyperparam['dis_start_appfeatloss_iter']) and  (iteration + 1 < loss_hyperparam['dis_end_appfeatloss_iter']):
+    #         assert(tea_app_feats.shape == stu_app_feats.shape),'app_feat size dont match between student and teacher'
+    #         appfeatloss = loss_hyperparam['dis_appfeatloss_weight'] * torch.mean((tea_app_feats - stu_app_feats)**2)
+    #         total_loss += appfeatloss
+    #         summary_writer.add_scalar('train/appfeatloss', appfeatloss.detach().item(), global_step=iteration)
+    #     if (iteration + 1 > loss_hyperparam['dis_start_rfloss_iter']) and  (iteration + 1 < loss_hyperparam['dis_end_rfloss_iter']):
+    #         assert (tea_sigmas.shape == stu_sigmas.shape) and (tea_rgbs.shape == stu_rgbs.shape), 'app_feat size dont match between student and teacher'
+    #         rfloss = loss_hyperparam['dis_rfloss_weight'] * (torch.mean((tea_sigmas - stu_sigmas) ** 2) + torch.mean((tea_rgbs - stu_rgbs) ** 2))
+    #         total_loss += rfloss
+    #         summary_writer.add_scalar('train/rfloss', rfloss.detach().item(), global_step=iteration)
+    #     if (iteration + 1 > loss_hyperparam['dis_start_ftloss_iter']) and  (iteration + 1 < loss_hyperparam['dis_end_ftloss_iter']):
+    #         assert (tea_rgb_maps.shape == stu_rgb_maps.shape), 'app_feat size dont match between student and teacher'
+    #         ftloss = loss_hyperparam['dis_ftloss_weight'] * torch.mean((stu_rgb_maps - tea_rgb_maps) ** 2)
+    #         total_loss += ftloss
+    #         summary_writer.add_scalar('train/ftloss', ftloss.detach().item(), global_step=iteration)
+    #     summary_writer.add_scalar('train/total_loss', total_loss.detach().item(), global_step=iteration)
+    #     optimizer.zero_grad()
+    #     total_loss.backward()
+    #     optimizer.step()
+    #
+    #     mse = torch.mean((stu_rgb_maps - tea_rgb_maps) ** 2).detach().item()
+    #
+    #     PSNRs.append(-10.0 * np.log(mse) / np.log(10.0))
+    #     summary_writer.add_scalar('train/PSNR', PSNRs[-1], global_step=iteration)
+    #     summary_writer.add_scalar('train/mse', mse, global_step=iteration)
+    #
+    #     for param_group in optimizer.param_groups:
+    #         param_group['lr'] = param_group['lr'] * lr_factor
+    #
+    #     # Print the current values of the losses.
+    #     if iteration % args.progress_refresh_rate == 0:
+    #         pbar.set_description(
+    #             f'Iteration {iteration:05d}:'
+    #             + f' train_psnr = {float(np.mean(PSNRs)):.2f}'
+    #             + f' test_psnr = {float(np.mean(PSNRs_test)):.2f}'
+    #             + f' mse = {mse:.6f}'
+    #         )
+    #         PSNRs = []
+    #
+    #     if iteration % args.dis_vis_every == args.dis_vis_every - 1 and args.dis_N_vis != 0:
+    #         PSNRs_test = evaluation_student_model(test_dataset, stu_model, args, stu_renderer, f'{logfolder}/distill/imgs_vis/', N_vis=args.N_vis,
+    #                                 prtx=f'{iteration:06d}_', N_samples=nSamples, white_bg=white_bg, ndc_ray=ndc_ray,
+    #                                 compute_extra_metrics=False)
+    #         summary_writer.add_scalar('test/psnr', np.mean(PSNRs_test), global_step=iteration)
+    stu_model.save(f'{logfolder}/distill_{args.expname}.th')
+
+    if args.dis_render_train:
+        os.makedirs(f'{logfolder}/distill/imgs_train_all', exist_ok=True)
+        train_dataset = dataset(args.datadir, split='train', downsample=args.downsample_train, is_stack=True)
+        PSNRs_test = evaluation_student_model(train_dataset, stu_model, args, stu_renderer, f'{logfolder}/distill/img_train_all/', N_vis=-1,
+                                     N_samples=-1, white_bg=white_bg, ndc_ray=ndc_ray,
+                                    compute_extra_metrics=False)
+        print(f'======> {args.expname} test all psnr: {np.mean(PSNRs_test)} <========================')
+
+    if args.render_test:
+        os.makedirs(f'{logfolder}/distill/img_test_all', exist_ok=True)
+        test_dataset = dataset(args.datadir, split='test', downsample=args.downsample_train, is_stack=True)
+        PSNRs_test = evaluation_student_model(test_dataset, stu_model, args, stu_renderer,
+                                              f'{logfolder}/distill/img_test_all/', N_vis=-1,
+                                              N_samples=-1, white_bg=white_bg, ndc_ray=ndc_ray,
+                                              compute_extra_metrics=False)
+        summary_writer.add_scalar('test/psnr_all', np.mean(PSNRs_test), global_step=args.dis_n_iters)
+        print(f'======> {args.expname} test all psnr: {np.mean(PSNRs_test)} <========================')
 
 if __name__ == '__main__':
 

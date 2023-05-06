@@ -99,6 +99,26 @@ class VanillaNeRF(torch.nn.Module):
                          {'params': self.app_linear.parameters(), 'lr':lr_init_network}]
         return grad_vars
 
+    def get_kwargs(self):
+        return {
+            'aabb': self.aabb,
+            'gridSize':self.gridSize.tolist(),
+            'D': self.D,
+            'W': self.W,
+            'pos_pe': self.pos_pe,
+            'dir_pe':self.dir_pe,
+            'distance_scale': self.distance_scale,
+            'rayMarch_weight_thres': self.rayMarch_weight_thres,
+            'near_far': self.near_far,
+            'density_shift': self.density_shift,
+            'step_ratio': self.step_ratio,
+        }
+    def save(self,path):
+        kwargs = self.get_kwargs()
+        ckpt = {'kwargs': kwargs, 'state_dict': self.state_dict()}
+        torch.save(ckpt, path)
+    def load(self, ckpt):
+        self.load_state_dict(ckpt['state_dict'])
     def sample_ray(self, rays_o, rays_d, is_train=True, N_samples=-1):
         N_samples = N_samples if N_samples>0 else self.nSamples
         stepsize = self.stepSize
