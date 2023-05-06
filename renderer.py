@@ -69,19 +69,29 @@ def Stu_vanilla_renderer(stu_model, rays_sampled, xyz_sampled, viewdir_sampled, 
     return torch.cat(rgb_maps), torch.cat(depth_maps), torch.cat(rgbs), torch.cat(sigmas), torch.cat(alphas), None, torch.cat(app_feats)
 
 def Stu_vanilla_renderer_test(rays, stu_model, chunk=4096, N_samples=-1, ndc_ray=False, white_bg=True, is_train=False, device='cuda'):
-    pass
-    # TODO: implement this function! rays to pos and dir in this function
-    # rgbs, alphas, depth_maps, weights, uncertainties = [], [], [], [], []
-    # N_rays_all = rays.shape[0]
-    # for chunk_idx in range(N_rays_all // chunk + int(N_rays_all % chunk > 0)):
-    #     rays_chunk = rays[chunk_idx * chunk:(chunk_idx + 1) * chunk].to(device)
-    #
-    #     rgb_map, depth_map, _, _, _, _, _ = tensorf(rays_chunk, is_train=is_train, white_bg=white_bg, ndc_ray=ndc_ray,
-    #                                                 N_samples=N_samples)
-    #
-    #     rgbs.append(rgb_map)
-    #     depth_maps.append(depth_map)
-    # return torch.cat(rgbs), None, torch.cat(depth_maps), None, None
+    rgbs, alphas, depth_maps, weights, uncertainties = [], [], [], [], []
+    N_rays_all = rays.shape[0]
+    for chunk_idx in range(N_rays_all // chunk + int(N_rays_all % chunk > 0)):
+        rays_chunk = rays[chunk_idx * chunk:(chunk_idx + 1) * chunk].to(device)
+        viewdirs = rays_chunk[:, 3:6]
+        xyz_sampled, z_vals, ray_valid = stu_model.sample_ray(rays_chunk[:, :3], viewdirs, is_train=is_train,
+                                                             N_samples=N_samples)
+        dists = torch.cat((z_vals[:, 1:] - z_vals[:, :-1], torch.zeros_like(z_vals[:, :1])), dim=-1)
+        viewdirs = viewdirs.view(-1, 1, 3).expand(xyz_sampled.shape)
+
+
+        rgb_map, depth_map, _, _, _, _, _, _, _ = stu_model(rays_chunk, xyz_sampled, viewdirs, z_vals, ray_valid,
+                                                                                                 is_train=is_train,
+                                                                                                 white_bg=white_bg,
+                                                                                                 ndc_ray=ndc_ray,
+                                                                                                 )
+
+        rgbs.append(rgb_map)
+        depth_maps.append(depth_map)
+    return torch.cat(rgbs), None, torch.cat(depth_maps), None, None
+
+
+
 def OctreeRender_trilinear_fast_rgbonly(rays, tensorf, chunk=4096, N_samples=-1, ndc_ray=False, white_bg=True, is_train=False, device='cuda'):
     rgbs, alphas, depth_maps, weights, uncertainties = [], [], [], [], []
     N_rays_all = rays.shape[0]

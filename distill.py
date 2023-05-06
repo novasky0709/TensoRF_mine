@@ -57,7 +57,7 @@ def evaluation_student_model(test_dataset,stu_model, args, stu_renderer, savePat
         W, H = test_dataset.img_wh
         rays = samples.view(-1,samples.shape[-1])
 
-        rgb_map, _, depth_map, _, _ = stu_renderer(rays, stu_model, chunk=2048, N_samples=N_samples,
+        rgb_map, _, depth_map, _, _ = stu_renderer_test(rays, stu_model, chunk=2048, N_samples=N_samples,
                                         ndc_ray=ndc_ray, white_bg = white_bg, device=device)
         rgb_map = rgb_map.clamp(0.0, 1.0)
 
@@ -143,7 +143,8 @@ def distill(args):
     kwargs.update({'device': device})
     tensorf_tea = eval(args.model_name+"_Distill")(**kwargs)
     tensorf_tea.load(ckpt)
-    stu_args = {'distance_scale':args.distance_scale,'rayMarch_weight_thres':args.rm_weight_mask_thre}
+    stu_args = {'distance_scale':args.distance_scale,'rayMarch_weight_thres':args.rm_weight_mask_thre,\
+                'aabb':aabb,'gridSize':reso_cur,'near_far' : near_far,'density_shift':args.density_shift,'step_ratio':args.step_ratio}
 
 
     stu_model = eval(args.stu_model_name)(**stu_args)
@@ -246,7 +247,7 @@ def distill(args):
             )
             PSNRs = []
 
-        if iteration % args.dis_vis_every == args.vis_every and args.dis_N_vis != 0:
+        if iteration % args.dis_vis_every == args.dis_vis_every - 1 and args.dis_N_vis != 0:
             PSNRs_test = evaluation_student_model(test_dataset, stu_model, args, stu_renderer, f'{logfolder}/distill/imgs_vis/', N_vis=args.N_vis,
                                     prtx=f'{iteration:06d}_', N_samples=nSamples, white_bg=white_bg, ndc_ray=ndc_ray,
                                     compute_extra_metrics=False)
