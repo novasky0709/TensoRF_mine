@@ -18,6 +18,7 @@ class VanillaNeRF(torch.nn.Module):
         self.aabb = aabb
         self.density_shift = density_shift
         self.near_far = near_far
+        self.device = device
         self.step_ratio = step_ratio
         self.rayMarch_weight_thres = rayMarch_weight_thres
         self.distance_scale = distance_scale
@@ -74,13 +75,13 @@ class VanillaNeRF(torch.nn.Module):
     def update_stepSize(self, gridSize):
         print("aabb", self.aabb.view(-1))
         print("grid size", gridSize)
-        self.aabbSize = self.aabb[1] - self.aabb[0]
-        self.invaabbSize = 2.0/self.aabbSize
-        self.gridSize= torch.LongTensor(gridSize).to(self.device)
-        self.units=self.aabbSize / (self.gridSize-1)
-        self.stepSize=torch.mean(self.units)*self.step_ratio
-        self.aabbDiag = torch.sqrt(torch.sum(torch.square(self.aabbSize)))
-        self.nSamples=int((self.aabbDiag / self.stepSize).item()) + 1
+        self.aabbSize = self.aabb[1] - self.aabb[0] # 3 3 3
+        self.invaabbSize = 2.0/self.aabbSize # 0.6667
+        self.gridSize= gridSize.long().to(self.device) #128 128 128
+        self.units=self.aabbSize / (self.gridSize-1) #0.0236
+        self.stepSize=torch.mean(self.units)*self.step_ratio #0.0118->这个数错了，导致采样不对了
+        self.aabbDiag = torch.sqrt(torch.sum(torch.square(self.aabbSize))) # 5.19
+        self.nSamples=int((self.aabbDiag / self.stepSize).item()) + 1 #440
         print("sampling step size: ", self.stepSize)
         print("sampling number: ", self.nSamples)
 

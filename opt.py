@@ -152,12 +152,12 @@ def config_parser(cmd=None):
     parser.add_argument("--dis_ftloss_weight", type=int, default=1)
     parser.add_argument("--dis_vis_every", type=int, default=10000,
                         help='frequency of visualize the image')
-    parser.add_argument("--dis_N_vis", type=int, default=5,
+    parser.add_argument("--dis_N_vis", type=int, default=20,
                         help='N images to vis')
     parser.add_argument("--student_ckpt", type=str, default=None,
                         help='specific weights npy file to reload for coarse network')
     parser.add_argument("--dis_render_test", type=int, default=1)
-    parser.add_argument("--dis_render_train", type=int, default=0)
+    parser.add_argument("--dis_render_train", type=int, default=1)
     if cmd is not None:
         return parser.parse_args(cmd)
     else:

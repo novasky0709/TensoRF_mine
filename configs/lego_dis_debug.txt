@@ -48,4 +48,4 @@ dis_vis_every = 20000
 dis_N_vis = 5
 
 ckpt =./log/tensorf_lego_dis_debug/tensorf_lego_VM.th
-student_ckpt = ./log/tensorf_lego_dis_debug/distill_tensorf_lego_dis_debug.th
+# student_ckpt = ./log/tensorf_lego_dis_debug/distill_tensorf_lego_VM_DIS.th

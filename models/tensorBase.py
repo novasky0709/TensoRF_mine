@@ -261,7 +261,7 @@ class TensorBase(torch.nn.Module):
 
     def sample_ray_ndc(self, rays_o, rays_d, is_train=True, N_samples=-1):
         N_samples = N_samples if N_samples > 0 else self.nSamples
-        near, far = self.near_far
+        near, far = self.near_faroguo
         interpx = torch.linspace(near, far, N_samples).unsqueeze(0).to(rays_o)
         if is_train:
             interpx += torch.rand_like(interpx).to(rays_o) * ((far - near) / N_samples)
