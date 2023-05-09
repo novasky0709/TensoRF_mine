@@ -323,7 +323,7 @@ class TensorVMSplit_Distill(TensorVMSplit):
                                                              N_samples=N_samples)
             dists = torch.cat((z_vals[:, 1:] - z_vals[:, :-1], torch.zeros_like(z_vals[:, :1])), dim=-1)
         viewdirs = viewdirs.view(-1, 1, 3).expand(xyz_sampled.shape)
-
+        xyz_sampled_cp = xyz_sampled
         if self.alphaMask is not None:
             alphas = self.alphaMask.sample_alpha(xyz_sampled[ray_valid])
             alpha_mask = alphas > 0
@@ -365,7 +365,7 @@ class TensorVMSplit_Distill(TensorVMSplit):
             depth_map = torch.sum(weight * z_vals, -1)
             depth_map = depth_map + (1. - acc_map) * rays_chunk[..., -1]
 
-        return rgb_map, depth_map, rgb, sigma, alpha, weight, bg_weight,sigma_feat, app_feat, xyz_sampled,viewdirs, z_vals, ray_valid
+        return rgb_map, depth_map, rgb, sigma, alpha, weight, bg_weight,sigma_feat, app_feat, xyz_sampled_cp,viewdirs, z_vals, ray_valid
 
 
 class TensorCP(TensorBase):

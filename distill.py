@@ -135,7 +135,7 @@ def distill(args):
     nSamples = min(args.nSamples, cal_n_samples(reso_cur,
                                                 args.step_ratio))  # sqrt(128**2+128**2+128**2)/step(0.5)=443, nSample never more than 443 samples for one pixel
 
-    if args.ckpt is not None and not os.path.exists(args.ckpt):
+    if args.ckpt is None or not os.path.exists(args.ckpt):
         print('the ckpt path does not exists!! Distill must from a ckpt')
         return
     ckpt = torch.load(args.ckpt, map_location=device)
@@ -156,7 +156,8 @@ def distill(args):
                 'aabb':tensorf_tea.aabb,'gridSize':tensorf_tea.gridSize,'near_far' : tensorf_tea.near_far
 ,'density_shift':tensorf_tea.density_shift,'step_ratio':tensorf_tea.step_ratio}
     stu_model = eval(args.stu_model_name)(**stu_args)
-
+    if args.student_ckpt is not None :
+        stu_model.load(stu_ckpt)
     grad_vars = stu_model.get_optparam_groups(args.dis_lr_init)
     if args.dis_lr_decay_iters > 0:
         lr_factor = args.dis_lr_decay_target_ratio ** (1 / args.dis_lr_decay_iters)
@@ -190,8 +191,8 @@ def distill(args):
     PSNRs, PSNRs_test = [], [0]
 
     allrays, allrgbs = train_dataset.all_rays, train_dataset.all_rgbs
-    if not args.ndc_ray:
-        allrays, allrgbs = tensorf_tea.filtering_rays(allrays, allrgbs, bbox_only=True)
+    # if not args.ndc_ray:
+    #     allrays, allrgbs = tensorf_tea.filtering_rays(allrays, allrgbs, bbox_only=True)
     trainingSampler = SimpleSampler(allrays.shape[0], args.batch_size)
 
 
@@ -254,6 +255,7 @@ def distill(args):
             PSNRs = []
 
         if iteration % args.dis_vis_every == args.dis_vis_every - 1 and args.dis_N_vis != 0:
+            stu_model.save(f'{logfolder}/distill_{args.expname}_{iteration}.th')
             PSNRs_test = evaluation_student_model(test_dataset, stu_model, args, stu_renderer, f'{logfolder}/distill/imgs_vis/', N_vis=args.dis_N_vis,
                                     prtx=f'{iteration:06d}_', N_samples=nSamples, white_bg=white_bg, ndc_ray=ndc_ray,
                                     compute_extra_metrics=False)
@@ -264,7 +266,7 @@ def distill(args):
         os.makedirs(f'{logfolder}/distill/imgs_train_all', exist_ok=True)
         train_dataset = dataset(args.datadir, split='train', downsample=args.downsample_train, is_stack=True)
         PSNRs_test = evaluation_student_model(train_dataset, stu_model, args, stu_renderer, f'{logfolder}/distill/img_train_all/', N_vis=-1,
-                                     N_samples=-1, white_bg=white_bg, ndc_ray=ndc_ray,
+                                     N_samples=nSamples, white_bg=white_bg, ndc_ray=ndc_ray,
                                     compute_extra_metrics=False)
         print(f'======> {args.expname} test all psnr: {np.mean(PSNRs_test)} <========================')
 
@@ -273,13 +275,61 @@ def distill(args):
         test_dataset = dataset(args.datadir, split='test', downsample=args.downsample_train, is_stack=True)
         PSNRs_test = evaluation_student_model(test_dataset, stu_model, args, stu_renderer,
                                               f'{logfolder}/distill/img_test_all/', N_vis=-1,
-                                              N_samples=-1, white_bg=white_bg, ndc_ray=ndc_ray,
+                                              N_samples=nSamples, white_bg=white_bg, ndc_ray=ndc_ray,
                                               compute_extra_metrics=False)
         summary_writer.add_scalar('test/psnr_all', np.mean(PSNRs_test), global_step=args.dis_n_iters)
         print(f'======> {args.expname} test all psnr: {np.mean(PSNRs_test)} <========================')
 @torch.no_grad()
 def test(args):
-    pass
+    # init dataset
+    dataset = dataset_dict[args.dataset_name]
+    test_dataset = dataset(args.datadir, split='test', downsample=args.downsample_train, is_stack=True)
+    white_bg = test_dataset.white_bg
+    ndc_ray = args.ndc_ray
+
+    if not os.path.exists(args.ckpt):
+        print('the ckpt path does not exists!!')
+        return
+
+    ckpt = torch.load(args.ckpt, map_location=device)
+    kwargs = ckpt['kwargs']
+    kwargs.update({'device': device})
+    tensorf_tea = eval(args.model_name)(**kwargs)
+    tensorf_tea.load(ckpt)
+
+    if args.student_ckpt is not None:
+        if not os.path.exists(args.student_ckpt):
+            print('the student ckpt path does not exists!! ')
+            return
+        print(args.student_ckpt)
+        stu_ckpt = torch.load(args.student_ckpt, map_location=device)
+        stu_args = stu_ckpt['kwargs']
+        stu_args.update({'device': device})
+    else:
+        print('Set the student ckpt, plz!! ')
+        exit()
+    stu_model = eval(args.stu_model_name)(**stu_args)
+    stu_model.load(stu_ckpt)
+
+
+
+    logfolder = os.path.dirname(args.ckpt)
+    if args.render_train:
+        os.makedirs(f'{logfolder}/distill/imgs_train_all', exist_ok=True)
+        train_dataset = dataset(args.datadir, split='train', downsample=args.downsample_train, is_stack=True)
+        PSNRs_test = evaluation_student_model(train_dataset, stu_model, args, stu_renderer, f'{logfolder}/distill/img_train_all/', N_vis=-1,
+                                     N_samples=-1, white_bg=white_bg, ndc_ray=ndc_ray,
+                                    compute_extra_metrics=False)
+        print(f'======> {args.expname} train all psnr: {np.mean(PSNRs_test)} <========================')
+
+    if args.render_test:
+        os.makedirs(f'{logfolder}/{args.expname}/distill/imgs_test_all', exist_ok=True)
+        PSNRs_test = evaluation_student_model(test_dataset, stu_model, args, stu_renderer, f'{logfolder}/distill/img_train_all/', N_vis=-1,
+                                     N_samples=-1, white_bg=white_bg, ndc_ray=ndc_ray,
+                                    compute_extra_metrics=False)
+
+
+
 
 if __name__ == '__main__':
     torch.set_default_dtype(torch.float32)
@@ -288,8 +338,8 @@ if __name__ == '__main__':
 
     args = config_parser()
     print(args)
-    flag = True
-    if flag:
+
+    if args.dis_reconstruction:
         distill(args)
     else:
         test(args)

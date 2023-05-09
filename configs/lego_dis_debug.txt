@@ -1,14 +1,14 @@
 
 dataset_name = blender
 datadir = /home/yuze/devdata/project/dataset/nerf_synthetic/lego
-expname =  tensorf_lego_dis_debug
+expname =  tensorf_lego_dis_05090
 basedir = ./log
 
 n_iters = 30000
 N_voxel_init = 2097156 # 128**3
 N_voxel_final = 27000000 # 300**3
 upsamp_list = [2000,3000,4000,5500,7000]
-update_AlphaMask_list = [2000,4000]
+update_AlphaMask_list = [999999999]
 
 N_vis = 5
 vis_every = 10000
@@ -47,5 +47,6 @@ dis_ftloss_weight = -1
 dis_vis_every = 20000
 dis_N_vis = 5
 
-ckpt =./log/tensorf_lego_dis_debug/tensorf_lego_VM.th
-# student_ckpt = ./log/tensorf_lego_dis_debug/distill_tensorf_lego_VM_DIS.th
+dis_reconstruction = True
+ckpt =./log/tensorf_lego_VM_nomsk.th
+# student_ckpt = ./log/tensorf_lego_dis_debug/distill_lego_dis_DIS_05083_ftloss_only.th

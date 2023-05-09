@@ -52,7 +52,7 @@ class VanillaNeRF(torch.nn.Module):
             hidden_feat = x
             validsigma = F.softplus(self.density_linear(x) + self.density_shift)
             sigma[ray_valid] = validsigma.squeeze(dim=-1)
-        alpha, weight, bg_weight = raw2alpha(sigma, dists*self.distance_scale)
+        alpha, weight, bg_weight = raw2alpha(sigma, dists*self.distance_scale)# distance_scale 25
         app_mask = weight > self.rayMarch_weight_thres
         if app_mask.any():
             input_dir = self.dir_embed_fn(viewdir_sampled[app_mask])
@@ -75,13 +75,15 @@ class VanillaNeRF(torch.nn.Module):
     def update_stepSize(self, gridSize):
         print("aabb", self.aabb.view(-1))
         print("grid size", gridSize)
-        self.aabbSize = self.aabb[1] - self.aabb[0] # 3 3 3
-        self.invaabbSize = 2.0/self.aabbSize # 0.6667
-        self.gridSize= gridSize.long().to(self.device) #128 128 128
-        self.units=self.aabbSize / (self.gridSize-1) #0.0236
-        self.stepSize=torch.mean(self.units)*self.step_ratio #0.0118->这个数错了，导致采样不对了
-        self.aabbDiag = torch.sqrt(torch.sum(torch.square(self.aabbSize))) # 5.19
-        self.nSamples=int((self.aabbDiag / self.stepSize).item()) + 1 #440
+        self.aabbSize = self.aabb[1] - self.aabb[0] # [3,3,3]
+        self.invaabbSize = 2.0/self.aabbSize # [0.667 * 3]
+        if not isinstance(gridSize,torch.Tensor) :
+            gridSize = torch.Tensor(gridSize)# 300
+        self.gridSize= gridSize.long().to(self.device) # 300 300 300
+        self.units=self.aabbSize / (self.gridSize-1) #0.01
+        self.stepSize=torch.mean(self.units)*self.step_ratio #0.005
+        self.aabbDiag = torch.sqrt(torch.sum(torch.square(self.aabbSize)))
+        self.nSamples=int((self.aabbDiag / self.stepSize).item()) + 1 # 1036
         print("sampling step size: ", self.stepSize)
         print("sampling number: ", self.nSamples)
 
