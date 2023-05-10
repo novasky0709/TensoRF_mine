@@ -246,7 +246,9 @@ def distill(args):
                 lr_scale = 1 #0.1 ** (iteration / args.n_iters)
                 grad_vars = stu_model.get_optparam_groups(args.dis_lr_init)
                 optimizer = torch.optim.Adam(grad_vars, betas=(0.9, 0.99))
-
+        summary_writer.add_scalar('train/PSNR', PSNRs[-1], global_step=iteration)
+        summary_writer.add_scalar('train/mse', mse, global_step=iteration)
+        summary_writer.add_scalar('train/curr_loss', total_loss.detach().item(), global_step=iteration)
         # Print the current values of the losses.
         if iteration % args.progress_refresh_rate == 0:
             pbar.set_description(
@@ -257,9 +259,7 @@ def distill(args):
                 + f' mse = {mse:.6f}'
             )
             PSNRs = []
-        summary_writer.add_scalar('train/PSNR', PSNRs[-1], global_step=iteration)
-        summary_writer.add_scalar('train/mse', mse, global_step=iteration)
-        summary_writer.add_scalar('train/curr_loss', total_loss.detach().item(), global_step=iteration)
+
         if iteration % args.dis_vis_every == args.dis_vis_every - 1 and args.dis_N_vis != 0:
             stu_model.save(f'{logfolder}/distill_{args.expname}_{iteration}.th')
             PSNRs_test = evaluation_student_model(test_dataset, stu_model, args, stu_renderer, f'{logfolder}/distill/imgs_vis/', N_vis=args.dis_N_vis,
