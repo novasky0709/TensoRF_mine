@@ -215,17 +215,17 @@ def distill(args):
         # loss
         total_loss = 0
         # cauculate loss
-        if (iteration + 1 > loss_hyperparam['dis_start_appfeatloss_iter']) and  (iteration + 1 < loss_hyperparam['dis_end_appfeatloss_iter']):
+        if (iteration + 1 >= loss_hyperparam['dis_start_appfeatloss_iter']) and  (iteration + 1 < loss_hyperparam['dis_end_appfeatloss_iter']):
             assert(tea_app_feats.shape == stu_app_feats.shape),'app_feat size dont match between student and teacher'
             appfeatloss = loss_hyperparam['dis_appfeatloss_weight'] * torch.mean((tea_app_feats - stu_app_feats)**2)
             total_loss += appfeatloss
             summary_writer.add_scalar('train/appfeatloss', appfeatloss.detach().item(), global_step=iteration)
-        if (iteration + 1 > loss_hyperparam['dis_start_rfloss_iter']) and  (iteration + 1 < loss_hyperparam['dis_end_rfloss_iter']):
+        if (iteration + 1 >= loss_hyperparam['dis_start_rfloss_iter']) and  (iteration + 1 < loss_hyperparam['dis_end_rfloss_iter']):
             assert (tea_sigmas.shape == stu_sigmas.shape) and (tea_rgbs.shape == stu_rgbs.shape), 'app_feat size dont match between student and teacher'
             rfloss = loss_hyperparam['dis_rfloss_weight'] * (torch.mean((tea_sigmas - stu_sigmas) ** 2) + torch.mean((tea_rgbs - stu_rgbs) ** 2))
             total_loss += rfloss
             summary_writer.add_scalar('train/rfloss', rfloss.detach().item(), global_step=iteration)
-        if (iteration + 1 > loss_hyperparam['dis_start_ftloss_iter']) and  (iteration + 1 < loss_hyperparam['dis_end_ftloss_iter']):
+        if (iteration + 1 >= loss_hyperparam['dis_start_ftloss_iter']) and  (iteration + 1 < loss_hyperparam['dis_end_ftloss_iter']):
             assert (tea_rgb_maps.shape == stu_rgb_maps.shape), 'app_feat size dont match between student and teacher'
             ftloss = loss_hyperparam['dis_ftloss_weight'] * torch.mean((stu_rgb_maps - tea_rgb_maps) ** 2)
             total_loss += ftloss

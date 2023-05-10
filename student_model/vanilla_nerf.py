@@ -54,9 +54,9 @@ class VanillaNeRF(torch.nn.Module):
             sigma[ray_valid] = validsigma.squeeze(dim=-1)
         alpha, weight, bg_weight = raw2alpha(sigma, dists*self.distance_scale)# distance_scale 25
         app_mask = weight > self.rayMarch_weight_thres
+        app_feat[ray_valid] = hidden_feat
         if app_mask.any():
             input_dir = self.dir_embed_fn(viewdir_sampled[app_mask])
-            app_feat[ray_valid] = hidden_feat
             app_feat_valid = torch.cat([app_feat[app_mask],input_dir],dim = -1)
             valid_rgbs = torch.sigmoid(self.app_linear(app_feat_valid))
             rgb[app_mask] = valid_rgbs
