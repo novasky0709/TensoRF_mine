@@ -275,7 +275,7 @@ def distill(args):
         test_dataset = dataset(args.datadir, split='test', downsample=args.downsample_train, is_stack=True)
         PSNRs_test = evaluation_student_model(test_dataset, stu_model, args, stu_renderer,
                                               f'{logfolder}/distill/img_test_all/', N_vis=-1,
-                                              N_samples=nSamples, white_bg=white_bg, ndc_ray=ndc_ray,
+                                              N_samples=-1, white_bg=white_bg, ndc_ray=ndc_ray,
                                               compute_extra_metrics=False)
         summary_writer.add_scalar('test/psnr_all', np.mean(PSNRs_test), global_step=args.dis_n_iters)
         print(f'======> {args.expname} test all psnr: {np.mean(PSNRs_test)} <========================')
