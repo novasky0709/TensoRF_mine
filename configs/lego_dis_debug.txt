@@ -30,7 +30,7 @@ L1_weight_inital = 8e-5
 L1_weight_rest = 4e-5
 rm_weight_mask_thre = 1e-4
 
-dis_lr_init = 8e-3
+dis_lr_init = 8e-5
 dis_n_iters = 30000
 batch_size = 256
 dis_batch_size = 256

@@ -220,7 +220,7 @@ def distill(args):
             summary_writer.add_scalar('train/appfeatloss', appfeatloss.detach().item(), global_step=iteration)
         if (iteration + 1 >= loss_hyperparam['dis_start_rfloss_iter']) and  (iteration + 1 < loss_hyperparam['dis_end_rfloss_iter']):
             assert (tea_sigmas.shape == stu_sigmas.shape) and (tea_rgbs.shape == stu_rgbs.shape), 'app_feat size dont match between student and teacher'
-            rfloss = loss_hyperparam['dis_rfloss_weight'] * (torch.mean((tea_sigmas - stu_sigmas) ** 2) + torch.mean((tea_rgbs - stu_rgbs) ** 2))
+            rfloss = loss_hyperparam['dis_rfloss_weight'] * (torch.mean((tea_sigmas[tea_sigmas>stu_model.rayMarch_weight_thres] - stu_sigmas[tea_sigmas>stu_model.rayMarch_weight_thres]) ** 2) + torch.mean((tea_rgbs[tea_sigmas>stu_model.rayMarch_weight_thres] - stu_rgbs[tea_sigmas>stu_model.rayMarch_weight_thres]) ** 2))
             total_loss += rfloss
             summary_writer.add_scalar('train/rfloss', rfloss.detach().item(), global_step=iteration)
         if (iteration + 1 >= loss_hyperparam['dis_start_ftloss_iter']) and  (iteration + 1 < loss_hyperparam['dis_end_ftloss_iter']):
@@ -236,8 +236,6 @@ def distill(args):
         mse = torch.mean((stu_rgb_maps - tea_rgb_maps) ** 2).detach().item()
 
         PSNRs.append(-10.0 * np.log(mse) / np.log(10.0))
-        summary_writer.add_scalar('train/PSNR', PSNRs[-1], global_step=iteration)
-        summary_writer.add_scalar('train/mse', mse, global_step=iteration)
 
         for param_group in optimizer.param_groups:
             param_group['lr'] = param_group['lr'] * lr_factor
@@ -253,12 +251,15 @@ def distill(args):
         if iteration % args.progress_refresh_rate == 0:
             pbar.set_description(
                 f'Iteration {iteration:05d}:'
+                + f' curr_loss = {float(total_loss.detach().item()):.2f}'
                 + f' train_psnr = {float(np.mean(PSNRs)):.2f}'
                 + f' test_psnr = {float(np.mean(PSNRs_test)):.2f}'
                 + f' mse = {mse:.6f}'
             )
             PSNRs = []
-
+        summary_writer.add_scalar('train/PSNR', PSNRs[-1], global_step=iteration)
+        summary_writer.add_scalar('train/mse', mse, global_step=iteration)
+        summary_writer.add_scalar('train/curr_loss', total_loss.detach().item(), global_step=iteration)
         if iteration % args.dis_vis_every == args.dis_vis_every - 1 and args.dis_N_vis != 0:
             stu_model.save(f'{logfolder}/distill_{args.expname}_{iteration}.th')
             PSNRs_test = evaluation_student_model(test_dataset, stu_model, args, stu_renderer, f'{logfolder}/distill/imgs_vis/', N_vis=args.dis_N_vis,
