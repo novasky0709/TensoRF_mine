@@ -131,9 +131,9 @@ def distill(args):
 
     # init parameters
     aabb = train_dataset.scene_bbox.to(device)
-    reso_cur = N_to_reso(args.N_voxel_init, aabb)
-    nSamples = min(args.nSamples, cal_n_samples(reso_cur,
-                                                args.step_ratio))  # sqrt(128**2+128**2+128**2)/step(0.5)=443, nSample never more than 443 samples for one pixel
+    # reso_cur = N_to_reso(args.N_voxel_init, aabb)
+    # nSamples = min(args.nSamples, cal_n_samples(reso_cur,
+    #                                             args.step_ratio))  # sqrt(128**2+128**2+128**2)/step(0.5)=443, nSample never more than 443 samples for one pixel
 
     if args.ckpt is None or not os.path.exists(args.ckpt):
         print('the ckpt path does not exists!! Distill must from a ckpt')
@@ -152,7 +152,7 @@ def distill(args):
         stu_args.update({'device': device})
     else:
         print('Distill the student model from scratch!!!!')
-        stu_args = {'distance_scale':tensorf_tea.distance_scale,'rayMarch_weight_thres':args.rm_weight_mask_thre,\
+        stu_args = {'distance_scale':tensorf_tea.distance_scale,'rayMarch_weight_thres':ckpt['kwargs']['rayMarch_weight_thres'],\
                 'aabb':tensorf_tea.aabb,'gridSize':tensorf_tea.gridSize,'near_far' : tensorf_tea.near_far
 ,'density_shift':tensorf_tea.density_shift,'step_ratio':tensorf_tea.step_ratio}
     stu_model = eval(args.stu_model_name)(**stu_args)
@@ -206,7 +206,7 @@ def distill(args):
         # rays_train [4096,6], rgb_train [4096,3], rgb_maps [4096,3] depth_maps [4096]
         with torch.no_grad():
             tea_rgb_maps, tea_depth_maps, tea_rgbs, tea_sigmas, tea_alphas, tea_density_feats, tea_app_feats, xyz_sampled,viewdirs , z_vals, ray_valid  = tea_renderer(rays_train, tensorf_tea, chunk=args.batch_size,
-                                                                            N_samples=nSamples, white_bg=white_bg,
+                                                                            N_samples=-1, white_bg=white_bg,
                                                                             ndc_ray=ndc_ray, device=device, is_train=False)
             #e.g. rgb_maps [4096,3];depth_maps [4096]; rgbs [4096,443,3]; sigmas,alphas: [4096,443]
             # app_feats [19817,27]->youwenti xyz_sampled [4096,443,3]; z_vals [4096,443]; ray_valid [4096,443]
@@ -257,7 +257,7 @@ def distill(args):
         if iteration % args.dis_vis_every == args.dis_vis_every - 1 and args.dis_N_vis != 0:
             stu_model.save(f'{logfolder}/distill_{args.expname}_{iteration}.th')
             PSNRs_test = evaluation_student_model(test_dataset, stu_model, args, stu_renderer, f'{logfolder}/distill/imgs_vis/', N_vis=args.dis_N_vis,
-                                    prtx=f'{iteration:06d}_', N_samples=nSamples, white_bg=white_bg, ndc_ray=ndc_ray,
+                                    prtx=f'{iteration:06d}_', N_samples=-1, white_bg=white_bg, ndc_ray=ndc_ray,
                                     compute_extra_metrics=False)
             summary_writer.add_scalar('test/psnr', np.mean(PSNRs_test), global_step=iteration)
     stu_model.save(f'{logfolder}/distill_{args.expname}.th')
@@ -266,7 +266,7 @@ def distill(args):
         os.makedirs(f'{logfolder}/distill/imgs_train_all', exist_ok=True)
         train_dataset = dataset(args.datadir, split='train', downsample=args.downsample_train, is_stack=True)
         PSNRs_test = evaluation_student_model(train_dataset, stu_model, args, stu_renderer, f'{logfolder}/distill/img_train_all/', N_vis=-1,
-                                     N_samples=nSamples, white_bg=white_bg, ndc_ray=ndc_ray,
+                                     N_samples=-1, white_bg=white_bg, ndc_ray=ndc_ray,
                                     compute_extra_metrics=False)
         print(f'======> {args.expname} test all psnr: {np.mean(PSNRs_test)} <========================')
 

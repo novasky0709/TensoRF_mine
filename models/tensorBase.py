@@ -271,7 +271,7 @@ class TensorBase(torch.nn.Module):
         return rays_pts, interpx, ~mask_outbbox
 
     def sample_ray(self, rays_o, rays_d, is_train=True, N_samples=-1):
-        N_samples = N_samples if N_samples>0 else self.nSamples # 443
+        N_samples = N_samples if N_samples>0 else self.nSamples # 1036
         stepsize = self.stepSize
         near, far = self.near_far
         vec = torch.where(rays_d==0, torch.full_like(rays_d, 1e-6), rays_d)
