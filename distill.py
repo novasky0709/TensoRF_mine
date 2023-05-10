@@ -125,8 +125,6 @@ def distill(args):
     # init log file
     os.makedirs(logfolder, exist_ok=True)
     os.makedirs(f'{logfolder}/distill/imgs_vis', exist_ok=True)
-    os.makedirs(f'{logfolder}/distill/imgs_rgba', exist_ok=True)
-    os.makedirs(f'{logfolder}/distill/rgba', exist_ok=True)
     summary_writer = SummaryWriter(logfolder)
 
     # init parameters
@@ -320,7 +318,7 @@ def test(args):
 
 
 
-    logfolder = os.path.dirname(args.ckpt)
+    logfolder = f'{args.basedir}/{args.expname}'
     if args.render_train:
         os.makedirs(f'{logfolder}/distill/imgs_train_all', exist_ok=True)
         train_dataset = dataset(args.datadir, split='train', downsample=args.downsample_train, is_stack=True)
