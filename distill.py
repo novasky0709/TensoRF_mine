@@ -244,6 +244,13 @@ def distill(args):
         for param_group in optimizer.param_groups:
             param_group['lr'] = param_group['lr'] * lr_factor
 
+
+        if iteration in [loss_hyperparam['dis_end_appfeatloss_iter'], loss_hyperparam['dis_end_rfloss_iter'],loss_hyperparam['dis_end_ftloss_iter']]:
+                print("reset lr to initial")
+                lr_scale = 1 #0.1 ** (iteration / args.n_iters)
+                grad_vars = stu_model.get_optparam_groups(args.dis_lr_init)
+                optimizer = torch.optim.Adam(grad_vars, betas=(0.9, 0.99))
+
         # Print the current values of the losses.
         if iteration % args.progress_refresh_rate == 0:
             pbar.set_description(

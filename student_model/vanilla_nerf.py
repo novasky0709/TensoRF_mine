@@ -13,7 +13,7 @@ def raw2alpha(sigma, dist):
     return alpha, weights, T[:,-1:]
 
 class VanillaNeRF(torch.nn.Module):
-    def __init__(self, aabb, gridSize, D = 8,W = 256, device = 'cuda:0',pos_pe = 5, dir_pe = 3,distance_scale =25, rayMarch_weight_thres = 0.0001, near_far=[2.0, 6.0], density_shift = -10,step_ratio = 0.5):
+    def __init__(self, aabb, gridSize, D = 8,W = 256, device = 'cuda:0',pos_pe = 5, dir_pe = 2,distance_scale =25, rayMarch_weight_thres = 0.0001, near_far=[2.0, 6.0], density_shift = -10,step_ratio = 0.5):
         super(VanillaNeRF,self).__init__()
         self.aabb = aabb
         self.density_shift = density_shift
@@ -57,8 +57,10 @@ class VanillaNeRF(torch.nn.Module):
         app_feat[ray_valid] = hidden_feat
         if app_mask.any():
             input_dir = self.dir_embed_fn(viewdir_sampled[app_mask])
-            app_feat_valid = torch.cat([app_feat[app_mask],input_dir],dim = -1)
-            valid_rgbs = torch.sigmoid(self.app_linear(app_feat_valid))
+            app_feat_valid = torch.cat([input_dir, app_feat[app_mask]],dim = -1)
+            x = F.relu(self.app_linear[0](app_feat_valid))
+            x = F.relu(self.app_linear[1](x))
+            valid_rgbs = torch.sigmoid(self.app_linear[2](x))
             rgb[app_mask] = valid_rgbs
         acc_map = torch.sum(weight, -1)
         rgb_map = torch.sum(weight[..., None] * rgb, -2)
@@ -90,8 +92,7 @@ class VanillaNeRF(torch.nn.Module):
     def init_nn(self,pos_dim_pe, dir_dim_pe):
        self.encoder = nn.ModuleList([nn.Linear(pos_dim_pe,self.W)] + [nn.Linear(self.W,self.W) if (i not in [self.D//2 ]) else nn.Linear(self.W + pos_dim_pe,self.W) for i in range(self.D - 1)] + [nn.Linear(self.W , 27)])
        self.density_linear = nn.Linear(27,1)
-       self.app_linear = nn.Linear(27 + dir_dim_pe,3)
-
+       self.app_linear = nn.ModuleList([nn.Linear(27 + dir_dim_pe,128)] + [nn.Linear(128,128)] + [nn.Linear(128,3)])
     def set_device(self,device):
         for var in dir(self):
             if not var.startswith('_') and isinstance(getattr(self,var), nn.Module):
