@@ -57,7 +57,7 @@ def evaluation_student_model(test_dataset,stu_model, args, stu_renderer, savePat
         W, H = test_dataset.img_wh
         rays = samples.view(-1,samples.shape[-1])
 
-        rgb_map, _, depth_map, _, _ = stu_renderer_test(rays, stu_model, chunk=2048, N_samples=N_samples,
+        rgb_map, _, depth_map, _, _ = stu_renderer_test(rays, stu_model, chunk=args.dis_batch_size, N_samples=N_samples,
                                         ndc_ray=ndc_ray, white_bg = white_bg, device=device)
         rgb_map = rgb_map.clamp(0.0, 1.0)
 
@@ -68,15 +68,6 @@ def evaluation_student_model(test_dataset,stu_model, args, stu_renderer, savePat
             gt_rgb = test_dataset.all_rgbs[idxs[idx]].view(H, W, 3)
             loss = torch.mean((rgb_map - gt_rgb) ** 2)
             PSNRs.append(-10.0 * np.log(loss.item()) / np.log(10.0))
-
-            if compute_extra_metrics:
-                ssim = rgb_ssim(rgb_map, gt_rgb, 1)
-                l_a = rgb_lpips(gt_rgb.numpy(), rgb_map.numpy(), 'alex', tensorf.device)
-                l_v = rgb_lpips(gt_rgb.numpy(), rgb_map.numpy(), 'vgg', tensorf.device)
-                ssims.append(ssim)
-                l_alex.append(l_a)
-                l_vgg.append(l_v)
-
         rgb_map = (rgb_map.numpy() * 255).astype('uint8')
         # rgb_map = np.concatenate((rgb_map, depth_map), axis=1)
         rgb_maps.append(rgb_map)
@@ -220,10 +211,10 @@ def distill(args):
             summary_writer.add_scalar('train/appfeatloss', appfeatloss.detach().item(), global_step=iteration)
         if (iteration + 1 >= loss_hyperparam['dis_start_rfloss_iter']) and  (iteration + 1 < loss_hyperparam['dis_end_rfloss_iter']):
             assert (tea_sigmas.shape == stu_sigmas.shape) and (tea_rgbs.shape == stu_rgbs.shape), 'app_feat size dont match between student and teacher'
-            rfloss = loss_hyperparam['dis_rfloss_weight'] * (torch.mean((tea_sigmas[ray_valid][tea_sigmas[ray_valid] > tensorf_tea.rayMarch_weight_thres]\
-                                                                        - stu_sigmas[ray_valid][tea_sigmas[ray_valid] > tensorf_tea.rayMarch_weight_thres]) ** 2) + \
-                                                             torch.mean((tea_rgbs[ray_valid][tea_sigmas[ray_valid] > tensorf_tea.rayMarch_weight_thres] \
-                                                                         - stu_rgbs[ray_valid][tea_sigmas[ray_valid] > tensorf_tea.rayMarch_weight_thres]) **2) )
+            rfloss = loss_hyperparam['dis_rfloss_weight'] * (torch.mean((tea_sigmas[ray_valid]\
+                                                                        - stu_sigmas[ray_valid]) ** 2) + \
+                                                             torch.mean((tea_rgbs[ray_valid] \
+                                                                         - stu_rgbs[ray_valid]) **2) )
             total_loss += rfloss
             summary_writer.add_scalar('train/rfloss', rfloss.detach().item(), global_step=iteration)
         if (iteration + 1 >= loss_hyperparam['dis_start_ftloss_iter']) and  (iteration + 1 < loss_hyperparam['dis_end_ftloss_iter']):

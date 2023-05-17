@@ -13,7 +13,7 @@ def raw2alpha(sigma, dist):
     return alpha, weights, T[:,-1:]
 
 class VanillaNeRF(torch.nn.Module):
-    def __init__(self, aabb, gridSize, D = 8,W = 256, device = 'cuda:0',pos_pe = 5, dir_pe = 2,distance_scale =25, rayMarch_weight_thres = 0.0001, near_far=[2.0, 6.0], density_shift = -10,step_ratio = 0.5):
+    def __init__(self, aabb, gridSize, D = 8,W = 256, device = 'cuda:0',pos_pe = 10, dir_pe = 4,distance_scale =25, rayMarch_weight_thres = 0.0001, near_far=[2.0, 6.0], density_shift = -10,step_ratio = 0.5):
         super(VanillaNeRF,self).__init__()
         self.aabb = aabb
         self.density_shift = density_shift
@@ -39,7 +39,7 @@ class VanillaNeRF(torch.nn.Module):
         dists = torch.cat((z_vals[:, 1:] - z_vals[:, :-1], torch.zeros_like(z_vals[:, :1])), dim=-1)
         sigma = torch.zeros(xyz_sampled.shape[:-1], device=xyz_sampled.device)
         rgb = torch.zeros((*xyz_sampled.shape[:2], 3), device=xyz_sampled.device)
-        app_feat = torch.zeros((*xyz_sampled.shape[:2], 27), device=xyz_sampled.device)
+        app_feat = torch.zeros((*xyz_sampled.shape[:2], 256), device=xyz_sampled.device)
         sigma_feature = None
 
         if ray_valid.any():
@@ -50,17 +50,19 @@ class VanillaNeRF(torch.nn.Module):
                 if i in [self.D // 2]:
                     x = torch.cat([input_pos,x],dim = -1)
             hidden_feat = x
-            validsigma = F.softplus(self.density_linear(x) + self.density_shift)
+            # validsigma = F.softplus(self.density_linear(x) + self.density_shift)
+            validsigma = F.relu(self.density_linear(x))
             sigma[ray_valid] = validsigma.squeeze(dim=-1)
+            app_feat[ray_valid] = hidden_feat
         alpha, weight, bg_weight = raw2alpha(sigma, dists*self.distance_scale)# distance_scale 25
         app_mask = weight > self.rayMarch_weight_thres
-        app_feat[ray_valid] = hidden_feat
+
         if app_mask.any():
             input_dir = self.dir_embed_fn(viewdir_sampled[app_mask])
-            app_feat_valid = torch.cat([input_dir, app_feat[app_mask]],dim = -1)
-            x = F.relu(self.app_linear[0](app_feat_valid))
-            x = F.relu(self.app_linear[1](x))
-            valid_rgbs = torch.sigmoid(self.app_linear[2](x))
+            x = self.app_linear[0](app_feat[app_mask])
+            app_feat_valid = torch.cat([input_dir, x],dim = -1)
+            x = F.relu(self.app_linear[1](app_feat_valid))
+            valid_rgbs =  F.relu(self.app_linear[2](x))
             rgb[app_mask] = valid_rgbs
         acc_map = torch.sum(weight, -1)
         rgb_map = torch.sum(weight[..., None] * rgb, -2)
@@ -90,19 +92,17 @@ class VanillaNeRF(torch.nn.Module):
         print("sampling number: ", self.nSamples)
 
     def init_nn(self,pos_dim_pe, dir_dim_pe):
-       self.encoder = nn.ModuleList([nn.Linear(pos_dim_pe,self.W)] + [nn.Linear(self.W,self.W) if (i not in [self.D//2 ]) else nn.Linear(self.W + pos_dim_pe,self.W) for i in range(self.D - 1)] + [nn.Linear(self.W , 27)])
-       self.density_linear = nn.Linear(27,1)
-       self.app_linear = nn.ModuleList([nn.Linear(27 + dir_dim_pe,128)] + [nn.Linear(128,128)] + [nn.Linear(128,3)])
+       self.encoder = nn.ModuleList([nn.Linear(pos_dim_pe,self.W)] + [nn.Linear(self.W,self.W) if (i not in [self.D//2 ]) else nn.Linear(self.W + pos_dim_pe,self.W) for i in range(self.D - 1)])# + [nn.Linear(self.W , self.W)])
+       self.density_linear = nn.Linear(self.W,1)
+       self.app_linear = nn.ModuleList([nn.Linear(self.W, self.W)] + [nn.Linear(self.W + dir_dim_pe ,self.W //2)] + [nn.Linear(self.W//2,3)])
     def set_device(self,device):
         for var in dir(self):
             if not var.startswith('_') and isinstance(getattr(self,var), nn.Module):
                 getattr(self,var).to(device)
-
     def get_optparam_groups(self, lr_init_network = 0.001):
         grad_vars = [{'params': self.encoder.parameters(), 'lr': lr_init_network}, {'params': self.density_linear.parameters(), 'lr': lr_init_network},
                          {'params': self.app_linear.parameters(), 'lr':lr_init_network}]
         return grad_vars
-
     def get_kwargs(self):
         return {
             'aabb': self.aabb,
