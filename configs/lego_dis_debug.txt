@@ -44,8 +44,8 @@ dis_start_ftloss_iter = -1
 dis_end_ftloss_iter = -1
 dis_ftloss_weight = 1
 
-dis_vis_every = 20000
-dis_N_vis = 5
+dis_vis_every = 5000
+dis_N_vis = 3
 
 dis_reconstruction = True
 ckpt =./log/tensorf_lego_VM_nomsk.th

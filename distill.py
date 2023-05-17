@@ -211,9 +211,9 @@ def distill(args):
             summary_writer.add_scalar('train/appfeatloss', appfeatloss.detach().item(), global_step=iteration)
         if (iteration + 1 >= loss_hyperparam['dis_start_rfloss_iter']) and  (iteration + 1 < loss_hyperparam['dis_end_rfloss_iter']):
             assert (tea_sigmas.shape == stu_sigmas.shape) and (tea_rgbs.shape == stu_rgbs.shape), 'app_feat size dont match between student and teacher'
-            rfloss = loss_hyperparam['dis_rfloss_weight'] * (torch.mean((tea_sigmas[ray_valid]\
-                                                                        - stu_sigmas[ray_valid]) ** 2) + \
-                                                             torch.mean((tea_rgbs[ray_valid] \
+            rfloss = loss_hyperparam['dis_rfloss_weight'] * (torch.mean((tea_alphas[ray_valid]\
+                                                                        - stu_alphas[ray_valid]) ** 2) + \
+                                                            1/3 * torch.mean((tea_rgbs[ray_valid] \
                                                                          - stu_rgbs[ray_valid]) **2) )
             total_loss += rfloss
             summary_writer.add_scalar('train/rfloss', rfloss.detach().item(), global_step=iteration)
