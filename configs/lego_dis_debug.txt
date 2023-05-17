@@ -1,7 +1,7 @@
 
 dataset_name = blender
 datadir = /home/yuze/devdata/project/dataset/nerf_synthetic/lego
-expname =  tensorf_lego_dis_05120
+expname =  tensorf_lego_dis_0517_changenetwork
 basedir = ./log
 
 n_iters = 30000

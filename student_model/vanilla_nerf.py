@@ -62,7 +62,7 @@ class VanillaNeRF(torch.nn.Module):
             x = self.app_linear[0](app_feat[app_mask])
             app_feat_valid = torch.cat([input_dir, x],dim = -1)
             x = F.relu(self.app_linear[1](app_feat_valid))
-            valid_rgbs =  F.relu(self.app_linear[2](x))
+            valid_rgbs =  F.sigmoid(self.app_linear[2](x))
             rgb[app_mask] = valid_rgbs
         acc_map = torch.sum(weight, -1)
         rgb_map = torch.sum(weight[..., None] * rgb, -2)
