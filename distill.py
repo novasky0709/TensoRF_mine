@@ -168,7 +168,10 @@ def distill(args):
             loss_hyperparam[k] = args.dis_n_iters + 1
 
     print("lr decay", args.dis_lr_decay_target_ratio, args.dis_lr_decay_iters)
-
+    grad_var_coff_rgbs = nn.Parameter(torch.Tensor([0.045],device=device),requires_grad=True)
+    grad_var_coff_alphas = nn.Parameter(torch.ones([0.06],device=device),requires_grad=True)
+    grad_var_coff = [{'params':grad_var_coff_rgbs, 'lr':args.dis_rgb_and_alpha_coff_lr_init}] + [{'params':grad_var_coff_alphas, 'lr':args.dis_rgb_and_alpha_coff_lr_init}]
+    grad_vars += grad_var_coff
     optimizer = torch.optim.Adam(grad_vars, betas=(0.9, 0.99))
 
     # linear in logrithmic space
@@ -211,12 +214,12 @@ def distill(args):
             summary_writer.add_scalar('train/appfeatloss', appfeatloss.detach().item(), global_step=iteration)
         if (iteration + 1 >= loss_hyperparam['dis_start_rfloss_iter']) and  (iteration + 1 < loss_hyperparam['dis_end_rfloss_iter']):
             assert (tea_sigmas.shape == stu_sigmas.shape) and (tea_rgbs.shape == stu_rgbs.shape), 'app_feat size dont match between student and teacher'
-            rfloss = loss_hyperparam['dis_rfloss_weight'] * (torch.mean((tea_alphas[ray_valid]\
-                                                                        - stu_alphas[ray_valid]) ** 2) + \
-                                                            1/3 * torch.mean((tea_rgbs[ray_valid] \
-                                                                         - stu_rgbs[ray_valid]) **2) )
+            rfloss = loss_hyperparam['dis_rfloss_weight'] * (1/(2*grad_var_coff_alphas*grad_var_coff_alphas)*torch.mean((tea_alphas[ray_valid] - stu_alphas[ray_valid]) ** 2) + \
+                                                             1/(2*grad_var_coff_rgbs*grad_var_coff_rgbs)* torch.mean((tea_rgbs[ray_valid] - stu_rgbs[ray_valid]) **2) + torch.log(grad_var_coff_alphas * grad_var_coff_rgbs) )
             total_loss += rfloss
             summary_writer.add_scalar('train/rfloss', rfloss.detach().item(), global_step=iteration)
+            summary_writer.add_scalar('train/grad_var_coff_rgbs',grad_var_coff_rgbs.detach().item(),global_step=iteration)
+            summary_writer.add_scalar('train/grad_var_coff_alphas', grad_var_coff_alphas.detach().item(),global_step=iteration)
         if (iteration + 1 >= loss_hyperparam['dis_start_ftloss_iter']) and  (iteration + 1 < loss_hyperparam['dis_end_ftloss_iter']):
             assert (tea_rgb_maps.shape == stu_rgb_maps.shape), 'app_feat size dont match between student and teacher'
             ftloss = loss_hyperparam['dis_ftloss_weight'] * torch.mean((stu_rgb_maps - tea_rgb_maps) ** 2)

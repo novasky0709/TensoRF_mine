@@ -132,6 +132,8 @@ def config_parser(cmd=None):
     parser.add_argument("--statistic_time_consuming", action='store_true',
                         help='statistic time consuming for each part then evaluation')
     parser.add_argument("--stu_model_name", type=str, default='VanillaNeRF')
+    parser.add_argument("--dis_rgb_and_alpha_coff_lr_init", type=float, default=8e-5,
+                        help='dis_rgb_and_alpha_coff learning rate')
     parser.add_argument("--dis_lr_init", type=float, default=8e-5,
                         help='learning rate')
     parser.add_argument("--dis_lr_decay_iters", type=int, default=-1,

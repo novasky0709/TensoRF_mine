@@ -1,7 +1,7 @@
 
 dataset_name = blender
 datadir = /home/yuze/devdata/project/dataset/nerf_synthetic/lego
-expname =  tensorf_lego_dis_0517_changenetwork
+expname =  tensorf_lego_dis_debug
 basedir = ./log
 
 n_iters = 30000
@@ -32,7 +32,7 @@ rm_weight_mask_thre = 1e-4
 
 dis_lr_init = 1e-6
 dis_n_iters = 600000
-batch_size = 128
+batch_size = 512
 dis_batch_size = 128
 dis_start_appfeatloss_iter = -1
 dis_end_appfeatloss_iter = -1
@@ -44,7 +44,7 @@ dis_start_ftloss_iter = -1
 dis_end_ftloss_iter = -1
 dis_ftloss_weight = 1
 
-dis_vis_every = 5000
+dis_vis_every = 50000
 dis_N_vis = 3
 
 dis_reconstruction = True
