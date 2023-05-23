@@ -3,25 +3,11 @@ import torch
 import torch.nn as nn
 import utils
 import torch.nn.functional as F
-def raw2alpha(sigma, dist):
-    # sigma, dist  [N_rays, N_samples]
-    alpha = 1. - torch.exp(-sigma*dist)
+from student_model.base_nerf import raw2alpha, BaseNeRF
 
-    T = torch.cumprod(torch.cat([torch.ones(alpha.shape[0], 1).to(alpha.device), 1. - alpha + 1e-10], -1), -1)
-
-    weights = alpha * T[:, :-1]  # [N_rays, N_samples]
-    return alpha, weights, T[:,-1:]
-
-class VanillaNeRF(torch.nn.Module):
+class VanillaNeRF(BaseNeRF):
     def __init__(self, aabb, gridSize, D = 8,W = 256, device = 'cuda:0',pos_pe = 10, dir_pe = 4,distance_scale =25, rayMarch_weight_thres = 0.0001, near_far=[2.0, 6.0], density_shift = -10,step_ratio = 0.5):
-        super(VanillaNeRF,self).__init__()
-        self.aabb = aabb
-        self.density_shift = density_shift
-        self.near_far = near_far
-        self.device = device
-        self.step_ratio = step_ratio
-        self.rayMarch_weight_thres = rayMarch_weight_thres
-        self.distance_scale = distance_scale
+        super(VanillaNeRF,self).__init__(aabb, gridSize, density_shift, near_far, device, step_ratio, rayMarch_weight_thres, distance_scale)
         self.D = D
         self.W = W
         self.device = device
@@ -30,7 +16,6 @@ class VanillaNeRF(torch.nn.Module):
         self.pos_embed_fn, pos_dim_pe = utils.get_embedder(self.pos_pe, 0, input_dims=3)
         self.dir_embed_fn, dir_dim_pe = utils.get_embedder(self.dir_pe, 0, input_dims=3)
 
-        self.update_stepSize(gridSize)
         self.init_nn(pos_dim_pe, dir_dim_pe)
         self.set_device(device)
     def forward(self,ray_sampled, xyz_sampled, viewdir_sampled, z_vals, ray_valid,white_bg=True, is_train=False, ndc_ray=False):
@@ -62,7 +47,7 @@ class VanillaNeRF(torch.nn.Module):
             x = self.app_linear[0](app_feat[app_mask])
             app_feat_valid = torch.cat([input_dir, x],dim = -1)
             x = F.relu(self.app_linear[1](app_feat_valid))
-            valid_rgbs =  F.sigmoid(self.app_linear[2](x))
+            valid_rgbs =  torch.sigmoid(self.app_linear[2](x))
             rgb[app_mask] = valid_rgbs
         acc_map = torch.sum(weight, -1)
         rgb_map = torch.sum(weight[..., None] * rgb, -2)
@@ -76,29 +61,12 @@ class VanillaNeRF(torch.nn.Module):
         return rgb_map, depth_map, rgb, sigma, alpha, weight, bg_weight, sigma_feature, app_feat
         # return sigma, app, hidden_feat
 
-    def update_stepSize(self, gridSize):
-        print("aabb", self.aabb.view(-1))
-        print("grid size", gridSize)
-        self.aabbSize = self.aabb[1] - self.aabb[0] # [3,3,3]
-        self.invaabbSize = 2.0/self.aabbSize # [0.667 * 3]
-        if not isinstance(gridSize,torch.Tensor) :
-            gridSize = torch.Tensor(gridSize)# 300
-        self.gridSize= gridSize.long().to(self.device) # 300 300 300
-        self.units=self.aabbSize / (self.gridSize-1) #0.01
-        self.stepSize=torch.mean(self.units)*self.step_ratio #0.005
-        self.aabbDiag = torch.sqrt(torch.sum(torch.square(self.aabbSize)))
-        self.nSamples=int((self.aabbDiag / self.stepSize).item()) + 1 # 1036
-        print("sampling step size: ", self.stepSize)
-        print("sampling number: ", self.nSamples)
 
     def init_nn(self,pos_dim_pe, dir_dim_pe):
        self.encoder = nn.ModuleList([nn.Linear(pos_dim_pe,self.W)] + [nn.Linear(self.W,self.W) if (i not in [self.D//2 ]) else nn.Linear(self.W + pos_dim_pe,self.W) for i in range(self.D - 1)])# + [nn.Linear(self.W , self.W)])
        self.density_linear = nn.Linear(self.W,1)
        self.app_linear = nn.ModuleList([nn.Linear(self.W, self.W)] + [nn.Linear(self.W + dir_dim_pe ,self.W //2)] + [nn.Linear(self.W//2,3)])
-    def set_device(self,device):
-        for var in dir(self):
-            if not var.startswith('_') and isinstance(getattr(self,var), nn.Module):
-                getattr(self,var).to(device)
+
     def get_optparam_groups(self, lr_init_network = 0.001):
         grad_vars = [{'params': self.encoder.parameters(), 'lr': lr_init_network}, {'params': self.density_linear.parameters(), 'lr': lr_init_network},
                          {'params': self.app_linear.parameters(), 'lr':lr_init_network}]
@@ -117,39 +85,30 @@ class VanillaNeRF(torch.nn.Module):
             'density_shift': self.density_shift,
             'step_ratio': self.step_ratio,
         }
-    def save(self,path):
-        kwargs = self.get_kwargs()
-        ckpt = {'kwargs': kwargs, 'state_dict': self.state_dict()}
-        torch.save(ckpt, path)
-    def load(self, ckpt):
-        self.load_state_dict(ckpt['state_dict'])
-    def sample_ray(self, rays_o, rays_d, is_train=True, N_samples=-1):
-        N_samples = N_samples if N_samples>0 else self.nSamples
-        stepsize = self.stepSize
-        near, far = self.near_far
-        vec = torch.where(rays_d==0, torch.full_like(rays_d, 1e-6), rays_d)
-        rate_a = (self.aabb[1] - rays_o) / vec
-        rate_b = (self.aabb[0] - rays_o) / vec
-        t_min = torch.minimum(rate_a, rate_b).amax(-1).clamp(min=near, max=far)
-
-        rng = torch.arange(N_samples)[None].float() # [1,N_samples]:[0,1,2,3,4,5,6,.....,N_samples-1]
-        if is_train:
-            rng = rng.repeat(rays_d.shape[-2],1) # [2048,1147] : [N_pixel_sample_per_image,N_point_sample_per_ray]
-            rng += torch.rand_like(rng[:,[0]])
-        step = stepsize * rng.to(rays_o.device)
-        interpx = (t_min[...,None] + step)
-
-        rays_pts = rays_o[...,None,:] + rays_d[...,None,:] * interpx[...,None]
-        mask_outbbox = ((self.aabb[0]>rays_pts) | (rays_pts>self.aabb[1])).any(dim=-1)
-
-        return rays_pts, interpx, ~mask_outbbox
 
 if __name__ == '__main__':
     # rays_train [4096,6], rgb_train [4096,3], rgb_maps [4096,3] depth_maps [4096]
-    vn = VanillaNeRF()
-    rays_train = torch.rand([4096,6] ,device = 'cuda:0')
-    rgb_train = torch.rand([4096,1] ,device = 'cuda:0')
-    density, app, hidden_feat = vn(rays_train)
-    print(density.shape)
-    print(app.shape)
-    print(hidden_feat.shape)
+    from opt import config_parser
+    from models.tensoRF import TensorVMSplit_Distill
+    args = config_parser()
+    device = 'cuda:0'
+    args.ckpt = '/home/yuze/Documents/project/TensoRF/log/tensorf_lego_VM_nomsk.th'
+    ckpt = torch.load(args.ckpt, map_location=device)
+    kwargs = ckpt['kwargs']
+    kwargs.update({'device': device})
+    tensorf_tea = TensorVMSplit_Distill(**kwargs)
+    tensorf_tea.load(ckpt)
+    stu_args = {'distance_scale': tensorf_tea.distance_scale,
+                'rayMarch_weight_thres': ckpt['kwargs']['rayMarch_weight_thres'], \
+                'aabb': tensorf_tea.aabb, 'gridSize': tensorf_tea.gridSize, 'near_far': tensorf_tea.near_far
+        , 'density_shift': tensorf_tea.density_shift, 'step_ratio': tensorf_tea.step_ratio}
+    vn = VanillaNeRF(**stu_args)
+    rays_chunk = torch.rand([128,6] ,device = 'cuda:0')
+    xyz_chunk = torch.rand([128,1036,3] ,device = 'cuda:0')
+    viewdir_chunk = torch.rand([128,1036,3] ,device = 'cuda:0')
+    z_vals_chunk = torch.rand([128,1036] ,device = 'cuda:0')
+    ray_valid_chunk = z_vals_chunk>0
+    rgb_map, depth_map, rgb, sigma, alpha, weight, bg_weight, sigma_feat, app_feat = vn(rays_chunk, xyz_chunk, viewdir_chunk, z_vals_chunk, ray_valid_chunk,is_train=True, white_bg = True, ndc_ray=0)
+    print(rgb_map.shape)
+    print(rgb.shape)
+    print(sigma.shape)

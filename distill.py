@@ -12,6 +12,7 @@ from utils import *
 from torch.utils.tensorboard import SummaryWriter
 import datetime
 from student_model.vanilla_nerf import VanillaNeRF
+from student_model.hypernet_vanilla_nerf import HypernetVanillaNeRF
 from dataLoader import dataset_dict
 import sys
 from models.tensoRF import TensorVMSplit_Distill
@@ -141,13 +142,20 @@ def distill(args):
         stu_args.update({'device': device})
     else:
         print('Distill the student model from scratch!!!!')
+        # Vanilla NeRF
+        # stu_args = {'distance_scale':tensorf_tea.distance_scale,'rayMarch_weight_thres':ckpt['kwargs']['rayMarch_weight_thres'],\
+        #         'aabb':tensorf_tea.aabb,'gridSize':tensorf_tea.gridSize,'near_far' : tensorf_tea.near_far
+        #         ,'density_shift':tensorf_tea.density_shift,'step_ratio':tensorf_tea.step_ratio}
+        # HypernetVanilla NeRF
         stu_args = {'distance_scale':tensorf_tea.distance_scale,'rayMarch_weight_thres':ckpt['kwargs']['rayMarch_weight_thres'],\
                 'aabb':tensorf_tea.aabb,'gridSize':tensorf_tea.gridSize,'near_far' : tensorf_tea.near_far
-,'density_shift':tensorf_tea.density_shift,'step_ratio':tensorf_tea.step_ratio}
+                ,'density_shift':tensorf_tea.density_shift,'step_ratio':tensorf_tea.step_ratio,'device':device
+                ,'pos_pe':args.dis_network_pos_pe,'dir_pe':args.dis_network_dir_pe,'z_dim':args.dis_network_z_dim, 'c_dim':args.dis_network_c_dim, }
     stu_model = eval(args.stu_model_name)(**stu_args)
     if args.student_ckpt is not None :
         stu_model.load(stu_ckpt)
     grad_vars = stu_model.get_optparam_groups(args.dis_lr_init)
+
     if args.dis_lr_decay_iters > 0:
         lr_factor = args.dis_lr_decay_target_ratio ** (1 / args.dis_lr_decay_iters)
     else:
@@ -168,8 +176,8 @@ def distill(args):
             loss_hyperparam[k] = args.dis_n_iters + 1
 
     print("lr decay", args.dis_lr_decay_target_ratio, args.dis_lr_decay_iters)
-    grad_var_coff_rgbs = nn.Parameter(torch.Tensor([0.045],device=device),requires_grad=True)
-    grad_var_coff_alphas = nn.Parameter(torch.ones([0.06],device=device),requires_grad=True)
+    grad_var_coff_rgbs = nn.Parameter(torch.tensor([0.045],device=device),requires_grad=True)
+    grad_var_coff_alphas = nn.Parameter(torch.tensor([0.06],device=device),requires_grad=True)
     grad_var_coff = [{'params':grad_var_coff_rgbs, 'lr':args.dis_rgb_and_alpha_coff_lr_init}] + [{'params':grad_var_coff_alphas, 'lr':args.dis_rgb_and_alpha_coff_lr_init}]
     grad_vars += grad_var_coff
     optimizer = torch.optim.Adam(grad_vars, betas=(0.9, 0.99))
@@ -200,6 +208,7 @@ def distill(args):
             tea_rgb_maps, tea_depth_maps, tea_rgbs, tea_sigmas, tea_alphas, tea_density_feats, tea_app_feats, xyz_sampled,viewdirs , z_vals, ray_valid  = tea_renderer(rays_train, tensorf_tea, chunk=args.batch_size,
                                                                             N_samples=-1, white_bg=white_bg,
                                                                             ndc_ray=ndc_ray, device=device, is_train=False)
+
             #e.g. rgb_maps [4096,3];depth_maps [4096]; rgbs [4096,443,3]; sigmas,alphas: [4096,443]
             # app_feats [19817,27]->youwenti xyz_sampled [4096,443,3]; z_vals [4096,443]; ray_valid [4096,443]
         stu_rgb_maps, stu_depth_maps, stu_rgbs, stu_sigmas, stu_alphas, _, stu_app_feats = stu_renderer(stu_model, rays_train, xyz_sampled, viewdirs, z_vals, ray_valid,  chunk=args.dis_batch_size,  ndc_ray=ndc_ray, white_bg = white_bg, is_train=True, device = device)
@@ -243,6 +252,14 @@ def distill(args):
                 lr_scale = 1 #0.1 ** (iteration / args.n_iters)
                 grad_vars = stu_model.get_optparam_groups(args.dis_lr_init)
                 optimizer = torch.optim.Adam(grad_vars, betas=(0.9, 0.99))
+
+        # for name, param in stu_model.density_linear.named_parameters():
+        #     summary_writer.add_scalar(f"sdf_gradient/{name}_grad_norm_density_linear", torch.norm(param.grad), iteration)
+        # for name, param in stu_model.encoder.named_parameters():
+        #     summary_writer.add_scalar(f"sdf_gradient/{name}_grad_norm_encoder", torch.norm(param.grad), iteration)
+        # for name, param in stu_model.app_linear.named_parameters():
+        #     summary_writer.add_scalar(f"sdf_gradient/{name}_grad_norm_app_linear", torch.norm(param.grad), iteration)
+
         summary_writer.add_scalar('train/PSNR', PSNRs[-1], global_step=iteration)
         summary_writer.add_scalar('train/mse', mse, global_step=iteration)
         summary_writer.add_scalar('train/curr_loss', total_loss.detach().item(), global_step=iteration)
@@ -343,6 +360,6 @@ if __name__ == '__main__':
     print(args)
 
     if args.dis_reconstruction:
-        distill(args)
+         distill(args)
     else:
         test(args)

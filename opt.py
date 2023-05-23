@@ -131,7 +131,7 @@ def config_parser(cmd=None):
                         help='frequency of visualize the image')
     parser.add_argument("--statistic_time_consuming", action='store_true',
                         help='statistic time consuming for each part then evaluation')
-    parser.add_argument("--stu_model_name", type=str, default='VanillaNeRF')
+    parser.add_argument("--stu_model_name", type=str, default='HypernetVanillaNeRF')
     parser.add_argument("--dis_rgb_and_alpha_coff_lr_init", type=float, default=8e-5,
                         help='dis_rgb_and_alpha_coff learning rate')
     parser.add_argument("--dis_lr_init", type=float, default=8e-5,
@@ -143,6 +143,10 @@ def config_parser(cmd=None):
     parser.add_argument("--dis_n_iters", type=int, default=30000)
     parser.add_argument("--batch_size", type=int, default=4096)
     parser.add_argument("--dis_batch_size", type=int, default=1024)
+    parser.add_argument("--dis_network_pos_pe", type=int, default=10)
+    parser.add_argument("--dis_network_dir_pe", type=int, default=4)
+    parser.add_argument("--dis_network_z_dim", type=int, default=16)
+    parser.add_argument("--dis_network_c_dim", type=int, default=7)
     parser.add_argument("--dis_start_appfeatloss_iter", type=int, default=0,help='-1: never start')
     parser.add_argument("--dis_end_appfeatloss_iter", type=int, default=-1, help='-1: never stop')
     parser.add_argument("--dis_appfeatloss_weight", type=int, default=1)
