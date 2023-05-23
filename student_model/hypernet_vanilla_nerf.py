@@ -158,7 +158,7 @@ class HypernetVanillaNeRF(BaseNeRF):
             'step_ratio': self.step_ratio,
             'z_num':self.z_num,
             'z_dim':self.z_dim,
-            'K':self.K
+            'c_dim':self.c_dim
         }
 
 if __name__ == '__main__':
