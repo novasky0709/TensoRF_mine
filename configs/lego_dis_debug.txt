@@ -37,16 +37,16 @@ dis_batch_size = 128
 dis_start_appfeatloss_iter = -1
 dis_end_appfeatloss_iter = -1
 dis_appfeatloss_weight = 1
-dis_start_rfloss_iter = 0
+dis_start_rfloss_iter = -1
 dis_end_rfloss_iter = -1
 dis_rfloss_weight = 1
-dis_start_ftloss_iter = -1
+dis_start_ftloss_iter = 0
 dis_end_ftloss_iter = -1
 dis_ftloss_weight = 1
 
 
-dis_vis_every = 20000
-dis_N_vis = 1
+dis_vis_every = 10000
+dis_N_vis = 2
 
 dis_network_pos_pe = 10
 dis_network_dir_pe = 4

@@ -18,6 +18,7 @@ class Embedding(nn.Module):
         for i in range(self.z_num):
             self.z_list.append(nn.Parameter(torch.randn(self.z_dim)))
 
+
 class HyperMLP(nn.Module):
 
     def __init__(self, z_dim = 32, in_size=256, out_size=256, K = 7):
@@ -39,25 +40,34 @@ class HyperMLP(nn.Module):
         self.out_size = out_size
         self.in_size = in_size
         self.K = K
-        self.B_w = nn.Parameter((torch.rand((self.z_dim, (self.in_size + 1) * self.K))-0.5)*(1/self.z_dim)**0.5)
-        self.B_b = nn.Parameter((torch.rand(((self.in_size + 1) * self.K))-0.5)*(1/self.in_size)**0.5)
+        self.B_w = nn.Parameter(torch.rand(self.z_dim, (self.in_size + 1) * self.K))
+        torch.nn.init.normal_(self.B_w, 0.0, np.sqrt(2) / np.sqrt((self.in_size + 1) * self.K))
 
+        self.B_b = nn.Parameter(torch.rand((self.in_size + 1) * self.K))
+        torch.nn.init.constant_(self.B_b, 0.0)
 
+        self.C_w = nn.Parameter((torch.rand((self.K , self.K))-0.5)*(1/self.K)**0.5)
+        torch.nn.init.normal_(self.C_w, 0.0, np.sqrt(2) / np.sqrt(self.K))
 
-        self.C = nn.Parameter((torch.rand((self.K , self.K))-0.5)*(1/self.K)**0.5)
-        self.W = nn.Parameter((torch.rand((self.K , self.out_size))-0.5)*(1/self.K)**0.5)
+        self.C_b = nn.Parameter((torch.rand(self.K) - 0.5) * (1 / self.K) ** 0.5)
+        torch.nn.init.constant_(self.C_b, 0.0)
 
+        self.W_w = nn.Parameter((torch.rand((self.K , self.out_size))-0.5)*(1/self.K)**0.5)
+        torch.nn.init.normal_(self.W_w, 0.0, np.sqrt(2) / np.sqrt(self.out_size))
+
+        self.W_b = nn.Parameter((torch.rand(self.out_size) - 0.5) * (1 / self.out_size) ** 0.5)
+        torch.nn.init.constant_(self.W_b, 0.0)
     def forward(self, z):
 
         B = torch.matmul(z, self.B_w) + self.B_b
-        B = F.tanh(B)
+        # B = F.tanh(B)
         B = B.view(self.in_size + 1, self.K) # [in_size,K]
 
-        mlp_para = F.tanh(torch.matmul(torch.relu(torch.matmul(B, self.C)),self.W))
-
+        # mlp_para = F.tanh(torch.matmul(torch.relu(torch.matmul(B, self.C)),self.W))
+        mlp_para = torch.matmul((torch.matmul(B, self.C_w)+self.C_b), self.W_w)
         # mlp_para = mlp_para.view(self.in_size, self.out_size + 1)
 
-        return mlp_para[1:], mlp_para[0]
+        return mlp_para[1:], self.W_b
 
 
 class HypernetVanillaNeRF(BaseNeRF):
@@ -96,27 +106,22 @@ class HypernetVanillaNeRF(BaseNeRF):
                     x = torch.cat([input_pos,x],dim = -1)
             hidden_feat = x
             # validsigma = F.softplus(self.density_linear(x) + self.density_shift)
-            w, b = self.density_linear(self.z_space.z_list[self.D])
-            x = torch.matmul(x, w) + b
-            validsigma = F.relu(x)
+            validsigma = F.relu(self.density_linear(x))
             sigma[ray_valid] = validsigma.squeeze(dim=-1)
             app_feat[ray_valid] = hidden_feat
-        alpha, weight, bg_weight = raw2alpha(sigma, dists*self.distance_scale)# distance_scale 25
+        alpha, weight, bg_weight = raw2alpha(sigma, dists * self.distance_scale)  # distance_scale 25
         app_mask = weight > self.rayMarch_weight_thres
 
         if app_mask.any():
             input_dir = self.dir_embed_fn(viewdir_sampled[app_mask])
-            w, b = self.app_linear[0](self.z_space.z_list[self.D + 1])
-            x = torch.matmul(app_feat[app_mask], w) + b
-            app_feat_valid = torch.cat([input_dir, x],dim = -1)
-            w, b = self.app_linear[1](self.z_space.z_list[self.D + 2]) # dao zhe grad yi jing quan 0 le !!
-            x = F.relu(torch.matmul(app_feat_valid, w) + b)
-            w, b = self.app_linear[2](self.z_space.z_list[self.D + 3])
-            valid_rgbs = torch.sigmoid(torch.matmul(x, w) + b)
+            x = self.app_linear[0](app_feat[app_mask])
+            app_feat_valid = torch.cat([input_dir, x], dim=-1)
+            x = F.relu(self.app_linear[1](app_feat_valid))
+            valid_rgbs = torch.sigmoid(self.app_linear[2](x))
             rgb[app_mask] = valid_rgbs
         acc_map = torch.sum(weight, -1)
         rgb_map = torch.sum(weight[..., None] * rgb, -2)
-        if white_bg or (is_train and torch.rand((1,))<0.5):
+        if white_bg or (is_train and torch.rand((1,)) < 0.5):
             rgb_map = rgb_map + (1. - acc_map[..., None])
         rgb_map = rgb_map.clamp(0, 1)
         with torch.no_grad():
@@ -133,11 +138,17 @@ class HypernetVanillaNeRF(BaseNeRF):
                                      HyperMLP(self.z_dim,self.W + pos_dim_pe, self.W, self.c_dim) for i in range(self.D - 1)]
                                     )
 
-       self.density_linear = HyperMLP(self.z_dim,self.W,1,self.c_dim)
-       self.app_linear = nn.ModuleList([HyperMLP(self.z_dim,self.W, self.W, self.c_dim)] + \
-                                       [HyperMLP(self.z_dim,self.W + dir_dim_pe ,self.W //2, self.c_dim)] +\
-                                       [HyperMLP(self.z_dim,self.W//2,3, self.c_dim)])
-
+       self.density_linear = nn.Linear(self.W, 1)
+       torch.nn.init.constant_(self.density_linear.bias, 0.0)
+       torch.nn.init.normal_(self.density_linear.weight, 0.0, np.sqrt(2) / np.sqrt(1))
+       self.app_linear = nn.ModuleList(
+           [nn.Linear(self.W, self.W)] + [nn.Linear(self.W + dir_dim_pe, self.W // 2)] + [nn.Linear(self.W // 2, 3)])
+       torch.nn.init.constant_(self.app_linear[0].bias, 0.0)
+       torch.nn.init.normal_(self.app_linear[0].weight, 0.0, np.sqrt(2) / np.sqrt(self.W))
+       torch.nn.init.constant_(self.app_linear[1].bias, 0.0)
+       torch.nn.init.normal_(self.app_linear[1].weight, 0.0, np.sqrt(2) / np.sqrt(self.W//2))
+       torch.nn.init.constant_(self.app_linear[2].bias, 0.0)
+       torch.nn.init.normal_(self.app_linear[2].weight, 0.0, np.sqrt(2) / np.sqrt(3))
     def get_optparam_groups(self, lr_init_network = 0.001):
         # {'params': self.z_space.z_list, 'lr': lr_init_network},
         grad_vars = [ {'params': self.encoder.parameters(), 'lr': lr_init_network},
