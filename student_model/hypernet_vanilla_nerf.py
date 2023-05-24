@@ -154,6 +154,7 @@ class HypernetVanillaNeRF(BaseNeRF):
         grad_vars = [ {'params': self.encoder.parameters(), 'lr': lr_init_network},
                          {'params': self.density_linear.parameters(), 'lr':lr_init_network},{'params': self.app_linear.parameters(), 'lr':lr_init_network}]
         return grad_vars
+
     def get_kwargs(self):
         return {
             'aabb': self.aabb,
