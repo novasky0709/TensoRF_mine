@@ -165,6 +165,8 @@ def config_parser(cmd=None):
     parser.add_argument("--dis_render_test", type=int, default=1)
     parser.add_argument("--dis_render_train", type=int, default=1)
     parser.add_argument('--dis_reconstruction', action='store_true')
+    parser.add_argument('--sc_datadir_list',type=str, action="append")
+    parser.add_argument('--sc_stuckpt_list', type=str, action="append")
     if cmd is not None:
         return parser.parse_args(cmd)
     else:

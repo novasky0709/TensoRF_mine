@@ -67,7 +67,7 @@ class HyperMLP(nn.Module):
         mlp_para = torch.matmul((torch.matmul(B, self.C_w)+self.C_b), self.W_w)
         # mlp_para = mlp_para.view(self.in_size, self.out_size + 1)
 
-        return mlp_para, self.W_b
+        return mlp_para[1:], self.W_b
 
 
 class HypernetVanillaNeRF(BaseNeRF):
