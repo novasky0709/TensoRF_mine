@@ -67,13 +67,13 @@ class HyperMLP(nn.Module):
         mlp_para = torch.matmul((torch.matmul(B, self.C_w)+self.C_b), self.W_w)
         # mlp_para = mlp_para.view(self.in_size, self.out_size + 1)
 
-        return mlp_para[1:], self.W_b
+        return mlp_para, self.W_b
 
 
-class HypernetVanillaNeRF(BaseNeRF):
+class CrossSceneHypernetVanillaNeRF(BaseNeRF):
     def __init__(self, aabb, gridSize, D = 8,W = 256, device = 'cuda:0',pos_pe = 10, dir_pe = 4,distance_scale =25, \
                  rayMarch_weight_thres = 0.0001, near_far=[2.0, 6.0], density_shift = -10,step_ratio = 0.5,z_num = 1, z_dim = 16, c_dim = 11):
-        super(HypernetVanillaNeRF,self).__init__(aabb, gridSize, density_shift, near_far, device, step_ratio, rayMarch_weight_thres, distance_scale)
+        super(CrossSceneHypernetVanillaNeRF,self).__init__(aabb, gridSize, density_shift, near_far, device, step_ratio, rayMarch_weight_thres, distance_scale)
         self.D = D
         self.W = W
         self.c_dim = c_dim
@@ -87,7 +87,7 @@ class HypernetVanillaNeRF(BaseNeRF):
 
         self.init_nn(pos_dim_pe, dir_dim_pe)
         self.set_device(device)
-    def forward(self,ray_sampled, xyz_sampled, viewdir_sampled, z_vals, ray_valid,white_bg=True, is_train=False, ndc_ray=False):
+    def forward(self,ray_sampled, xyz_sampled, viewdir_sampled, z_vals, ray_valid,white_bg=True, is_train=False, ndc_ray=False,scene_id=0):
         input_pos = self.pos_embed_fn(xyz_sampled[ray_valid])
 
         dists = torch.cat((z_vals[:, 1:] - z_vals[:, :-1], torch.zeros_like(z_vals[:, :1])), dim=-1)

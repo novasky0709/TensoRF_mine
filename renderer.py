@@ -43,7 +43,7 @@ def Distill_renderer(rays, tensorf, chunk=4096, N_samples=-1, ndc_ray=False, whi
         app_feats.append(app_feat)
     return torch.cat(rgb_maps), torch.cat(depth_maps), torch.cat(rgbs), torch.cat(sigmas), torch.cat(alphas), torch.cat(sigma_feats), torch.cat(app_feats), torch.cat(xyz_sampled_arr), torch.cat(viewdir_arr), torch.cat(z_vals_arr), torch.cat(ray_valid_arr)
 
-def Stu_vanilla_renderer(stu_model, rays_sampled, xyz_sampled, viewdir_sampled, z_vals, ray_valid, chunk, ndc_ray=False, white_bg=True, is_train=False,device='cuda:0'):
+def Stu_vanilla_renderer( stu_model, rays_sampled, xyz_sampled, viewdir_sampled, z_vals, ray_valid, chunk, ndc_ray=False, white_bg=True, is_train=False,device='cuda:0',scene_id=0):
     rgb_maps, depth_maps, rgbs, sigmas, alphas, sigma_feats, app_feats  = [], [], [], [], [], [], []
     N_rays_all = xyz_sampled.shape[0]
     for chunk_idx in range(N_rays_all // chunk + int(N_rays_all % chunk > 0)):
@@ -53,10 +53,11 @@ def Stu_vanilla_renderer(stu_model, rays_sampled, xyz_sampled, viewdir_sampled, 
         z_vals_chunk = z_vals[chunk_idx * chunk:(chunk_idx + 1) * chunk].to(device)
         ray_valid_chunk = ray_valid[chunk_idx * chunk:(chunk_idx + 1) * chunk].to(device)
 
-        rgb_map, depth_map, rgb, sigma, alpha, weight, bg_weight, sigma_feat, app_feat = stu_model(rays_chunk, xyz_chunk, viewdir_chunk, z_vals_chunk, ray_valid_chunk,
+        rgb_map, depth_map, rgb, sigma, alpha, weight, bg_weight, sigma_feat, app_feat = stu_model( rays_chunk, xyz_chunk, viewdir_chunk, z_vals_chunk, ray_valid_chunk,
                                                                                                  is_train=is_train,
                                                                                                  white_bg=white_bg,
                                                                                                  ndc_ray=ndc_ray,
+                                                                                                 scene_id = scene_id
                                                                                                  )
 
         rgb_maps.append(rgb_map)

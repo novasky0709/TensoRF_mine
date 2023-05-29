@@ -13,6 +13,7 @@ from torch.utils.tensorboard import SummaryWriter
 import datetime
 from student_model.vanilla_nerf import VanillaNeRF
 from student_model.hypernet_vanilla_nerf import HypernetVanillaNeRF
+from student_model.cs_hypernet_vanilla_nerf import CrossSceneHypernetVanillaNeRF
 from dataLoader import dataset_dict
 import sys
 from models.tensoRF import TensorVMSplit_Distill
@@ -96,14 +97,20 @@ def evaluation_student_model(test_dataset,stu_model, args, stu_renderer, savePat
 
 def distill(args):
     # init dataset
+    len_fitted_scene = len(args.sc_datadir_list)
+    print('{} scenes have been fit.'.format(len_fitted_scene))
+    train_dataset = []
+    test_dataset = []
     for datadir in args.sc_datadir_list:
         print('Loading {}'.format(datadir))
-
         dataset = dataset_dict[args.dataset_name]
-        train_dataset = dataset(datadir, split='train', downsample=args.downsample_train, is_stack=False)
-        test_dataset = dataset(datadir, split='test', downsample=args.downsample_train, is_stack=True)
-    white_bg = train_dataset.white_bg
-    near_far = train_dataset.near_far
+        train_dataset.append(dataset(datadir, split='train', downsample=args.downsample_train, is_stack=False))
+        test_dataset.append(dataset(datadir, split='test', downsample=args.downsample_train, is_stack=True))
+    dataset = dataset_dict[args.dataset_name]
+    train_dataset.append(dataset(args.datadir, split='train', downsample=args.downsample_train, is_stack=False))
+    test_dataset.append(dataset(args.datadir, split='test', downsample=args.downsample_train, is_stack=True))
+    white_bg = train_dataset[len_fitted_scene].white_bg
+    near_far = test_dataset[len_fitted_scene].near_far
     ndc_ray = args.ndc_ray
 
     # init resolution
@@ -115,7 +122,7 @@ def distill(args):
     if args.add_timestamp:
         logfolder = f'{args.basedir}/{args.expname}{datetime.datetime.now().strftime("-%Y%m%d-%H%M%S")}'
     else:
-        logfolder = f'{args.basedir}/{args.expname}'
+        logfolder = f'{args.basedir}/{args.expname}_{len_fitted_scene}'
 
     # init log file
     os.makedirs(logfolder, exist_ok=True)
@@ -123,19 +130,32 @@ def distill(args):
     summary_writer = SummaryWriter(logfolder)
 
     # init parameters
-    aabb = train_dataset.scene_bbox.to(device)
+    aabb = train_dataset[0].scene_bbox.to(device)
     # reso_cur = N_to_reso(args.N_voxel_init, aabb)
     # nSamples = min(args.nSamples, cal_n_samples(reso_cur,
     #                                             args.step_ratio))  # sqrt(128**2+128**2+128**2)/step(0.5)=443, nSample never more than 443 samples for one pixel
+    if len(args.sc_ckpt_list) != len_fitted_scene:
+        print('args.sc_ckpt_list doesnt match args.datadir_list. CHECK!')
+        return
+    tensorf_teas = []
+    for ckpt_name in args.sc_ckpt_list:
+        ckpt = torch.load(ckpt_name, map_location=device)
+        kwargs = ckpt['kwargs']
+        kwargs.update({'device': device})
+        tensorf_tea = eval(args.model_name+"_Distill")(**kwargs)
+        tensorf_tea.load(ckpt)
+        tensorf_teas.append(tensorf_tea)
 
-    if args.ckpt is None or not os.path.exists(args.ckpt):
-        print('the ckpt path does not exists!! Distill must from a ckpt')
+    if not os.path.exists(args.ckpt):
+        print('the ckpt path does not exists!!')
         return
     ckpt = torch.load(args.ckpt, map_location=device)
     kwargs = ckpt['kwargs']
     kwargs.update({'device': device})
     tensorf_tea = eval(args.model_name+"_Distill")(**kwargs)
     tensorf_tea.load(ckpt)
+    tensorf_teas.append(tensorf_tea)
+
     if args.student_ckpt is not None :
         if not os.path.exists(args.student_ckpt):
             print('the student ckpt path does not exists!! ')
@@ -193,28 +213,27 @@ def distill(args):
     torch.cuda.empty_cache()
     PSNRs, PSNRs_test = [], [0]
 
-    allrays, allrgbs = train_dataset.all_rays, train_dataset.all_rgbs
+
     # if not args.ndc_ray:
     #     allrays, allrgbs = tensorf_tea.filtering_rays(allrays, allrgbs, bbox_only=True)
-    trainingSampler = SimpleSampler(allrays.shape[0], args.batch_size)
+    trainingSampler = SimpleSampler(train_dataset[0].all_rays.shape[0], args.batch_size)
 
 
     pbar = tqdm(range(args.dis_n_iters), miniters=args.progress_refresh_rate, file=sys.stdout)
     for iteration in pbar:
-
+        scene_id = int(( iteration / args.sc_switch_iter) % (len_fitted_scene + 1))
         ray_idx = trainingSampler.nextids()
-        rays_train, rgb_train = allrays[ray_idx], allrgbs[ray_idx].to(device)
-
+        rays_train, rgb_train = train_dataset[scene_id].all_rays[ray_idx].to(device), train_dataset[scene_id].all_rgbs[ray_idx].to(device)
         # data example:
         # rays_train [4096,6], rgb_train [4096,3], rgb_maps [4096,3] depth_maps [4096]
         with torch.no_grad():
-            tea_rgb_maps, tea_depth_maps, tea_rgbs, tea_sigmas, tea_alphas, tea_density_feats, tea_app_feats, xyz_sampled,viewdirs , z_vals, ray_valid  = tea_renderer(rays_train, tensorf_tea, chunk=args.batch_size,
+            tea_rgb_maps, tea_depth_maps, tea_rgbs, tea_sigmas, tea_alphas, tea_density_feats, tea_app_feats, xyz_sampled,viewdirs , z_vals, ray_valid  = tea_renderer(rays_train, tensorf_teas[scene_id], chunk=args.batch_size,
                                                                             N_samples=-1, white_bg=white_bg,
                                                                             ndc_ray=ndc_ray, device=device, is_train=False)
 
             #e.g. rgb_maps [4096,3];depth_maps [4096]; rgbs [4096,443,3]; sigmas,alphas: [4096,443]
             # app_feats [19817,27]->youwenti xyz_sampled [4096,443,3]; z_vals [4096,443]; ray_valid [4096,443]
-        stu_rgb_maps, stu_depth_maps, stu_rgbs, stu_sigmas, stu_alphas, _, stu_app_feats = stu_renderer(stu_model, rays_train, xyz_sampled, viewdirs, z_vals, ray_valid,  chunk=args.dis_batch_size,  ndc_ray=ndc_ray, white_bg = white_bg, is_train=True, device = device)
+        stu_rgb_maps, stu_depth_maps, stu_rgbs, stu_sigmas, stu_alphas, _, stu_app_feats = stu_renderer(stu_model, rays_train, xyz_sampled, viewdirs, z_vals, ray_valid,  chunk=args.dis_batch_size,  ndc_ray=ndc_ray, white_bg = white_bg, is_train=True, device = device,scene_id = scene_id)
 
         # loss
         total_loss = 0

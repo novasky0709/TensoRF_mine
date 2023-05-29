@@ -87,7 +87,7 @@ class HypernetVanillaNeRF(BaseNeRF):
 
         self.init_nn(pos_dim_pe, dir_dim_pe)
         self.set_device(device)
-    def forward(self,ray_sampled, xyz_sampled, viewdir_sampled, z_vals, ray_valid,white_bg=True, is_train=False, ndc_ray=False):
+    def forward(self,ray_sampled, xyz_sampled, viewdir_sampled, z_vals, ray_valid,white_bg=True, is_train=False, ndc_ray=False,scene_id=0):
         input_pos = self.pos_embed_fn(xyz_sampled[ray_valid])
 
         dists = torch.cat((z_vals[:, 1:] - z_vals[:, :-1], torch.zeros_like(z_vals[:, :1])), dim=-1)

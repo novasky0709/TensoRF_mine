@@ -55,7 +55,7 @@ dis_network_c_dim = 15
 
 dis_reconstruction = True
 ckpt =./log/tensorf_lego_VM_nomsk.th
-stu_model_name = HypernetVanillaNeRF
+stu_model_name = CrossSceneHypernetVanillaNeRF
 sc_datadir_list = [/home/yuze/devdata/project/dataset/nerf_synthetic/lego,/home/yuze/devdata/project/dataset/nerf_synthetic/ficus]
-sc_stuckpt_list = [c,d]
+sc_ckpt_list = [/home/yuze/Documents/project/TensoRF/log/tensorf_lego_VM_nomsk.th,/home/yuze/Documents/project/TensoRF/log/tensorf_lego_VM_nomsk.th]
 # student_ckpt = ./log/tensorf_lego_dis_05120/distill_tensorf_lego_dis_05120_173999.th

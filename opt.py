@@ -131,7 +131,7 @@ def config_parser(cmd=None):
                         help='frequency of visualize the image')
     parser.add_argument("--statistic_time_consuming", action='store_true',
                         help='statistic time consuming for each part then evaluation')
-    parser.add_argument("--stu_model_name", type=str, default='HypernetVanillaNeRF')
+    parser.add_argument("--stu_model_name", type=str, default='CrossSceneHypernetVanillaNeRF')
     parser.add_argument("--dis_rgb_and_alpha_coff_lr_init", type=float, default=8e-5,
                         help='dis_rgb_and_alpha_coff learning rate')
     parser.add_argument("--dis_lr_init", type=float, default=8e-5,
@@ -166,7 +166,8 @@ def config_parser(cmd=None):
     parser.add_argument("--dis_render_train", type=int, default=1)
     parser.add_argument('--dis_reconstruction', action='store_true')
     parser.add_argument('--sc_datadir_list',type=str, action="append")
-    parser.add_argument('--sc_stuckpt_list', type=str, action="append")
+    parser.add_argument('--sc_ckpt_list', type=str, action="append")
+    parser.add_argument('--sc_switch_iter', type=int, default=50)
     if cmd is not None:
         return parser.parse_args(cmd)
     else:
