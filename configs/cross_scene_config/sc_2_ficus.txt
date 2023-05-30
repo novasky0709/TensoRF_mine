@@ -45,8 +45,8 @@ dis_end_ftloss_iter = -1
 dis_ftloss_weight = 1
 
 
-dis_vis_every = 20000
-dis_N_vis = 1
+dis_vis_every = 10000
+dis_N_vis = 3
 
 dis_network_pos_pe = 10
 dis_network_dir_pe = 4
@@ -59,4 +59,4 @@ stu_model_name = CrossSceneHypernetVanillaNeRF
 sc_datadir_list = [/home/yuze/devdata/project/dataset/nerf_synthetic/lego]
 sc_ckpt_list = [./log/0TensoRF_model/lego.th]
 sc_switch_iter = 100
-# student_ckpt = ./log/tensorf_lego_dis_05120/distill_tensorf_lego_dis_05120_173999.th
+student_ckpt = ./log/SC_0_lego_0/distill_SC_0_lego_1999.th

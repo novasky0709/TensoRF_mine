@@ -133,7 +133,7 @@ def distill(args):
     summary_writer = SummaryWriter(logfolder)
 
     # init parameters
-    aabb = train_dataset[0].scene_bbox.to(device)
+    aabb = train_dataset[len_fitted_scene].scene_bbox.to(device)
     # reso_cur = N_to_reso(args.N_voxel_init, aabb)
     # nSamples = min(args.nSamples, cal_n_samples(reso_cur,
     #                                             args.step_ratio))  # sqrt(128**2+128**2+128**2)/step(0.5)=443, nSample never more than 443 samples for one pixel
@@ -179,8 +179,14 @@ def distill(args):
                 ,'density_shift':tensorf_tea.density_shift,'step_ratio':tensorf_tea.step_ratio,'device':device
                 ,'pos_pe':args.dis_network_pos_pe,'dir_pe':args.dis_network_dir_pe,'z_dim':args.dis_network_z_dim, 'c_dim':args.dis_network_c_dim,'scene_num':len_fitted_scene + 1 }
     stu_model = eval(args.stu_model_name)(**stu_args)
-    if args.student_ckpt is not None :
+    if len_fitted_scene > 0:
+        if args.student_ckpt is None:
+            print('fitted scene > 1 ,so you must indicate one args.student_ckpt')
+            exit()
         stu_model.load(stu_ckpt)
+    elif args.student_ckpt is not None :
+        stu_model.load(stu_ckpt)
+
     grad_vars = stu_model.get_optparam_groups(args.dis_lr_init)
 
     if args.dis_lr_decay_iters > 0:
@@ -246,21 +252,21 @@ def distill(args):
             assert(tea_app_feats.shape == stu_app_feats.shape),'app_feat size dont match between student and teacher'
             appfeatloss = loss_hyperparam['dis_appfeatloss_weight'] * torch.mean((tea_app_feats - stu_app_feats)**2)
             total_loss += appfeatloss
-            summary_writer.add_scalar('train/appfeatloss', appfeatloss.detach().item(), global_step=iteration)
+            summary_writer.add_scalar('train/appfeatloss_scene{}'.format(scene_id), appfeatloss.detach().item(), global_step=iteration)
         if (iteration + 1 >= loss_hyperparam['dis_start_rfloss_iter']) and  (iteration + 1 < loss_hyperparam['dis_end_rfloss_iter']):
             assert (tea_sigmas.shape == stu_sigmas.shape) and (tea_rgbs.shape == stu_rgbs.shape), 'app_feat size dont match between student and teacher'
             rfloss = loss_hyperparam['dis_rfloss_weight'] * (1/(2*grad_var_coff_alphas*grad_var_coff_alphas)*torch.mean((tea_alphas[ray_valid] - stu_alphas[ray_valid]) ** 2) + \
                                                              1/(2*grad_var_coff_rgbs*grad_var_coff_rgbs)* torch.mean((tea_rgbs[ray_valid] - stu_rgbs[ray_valid]) **2) + torch.log(grad_var_coff_alphas * grad_var_coff_rgbs) )
             total_loss += rfloss
-            summary_writer.add_scalar('train/rfloss', rfloss.detach().item(), global_step=iteration)
-            summary_writer.add_scalar('train/grad_var_coff_rgbs',grad_var_coff_rgbs.detach().item(),global_step=iteration)
-            summary_writer.add_scalar('train/grad_var_coff_alphas', grad_var_coff_alphas.detach().item(),global_step=iteration)
+            summary_writer.add_scalar('train/rfloss_scene{}'.format(scene_id), rfloss.detach().item(), global_step=iteration)
+            summary_writer.add_scalar('train/grad_var_coff_rgbs_scene{}'.format(scene_id),grad_var_coff_rgbs.detach().item(),global_step=iteration)
+            summary_writer.add_scalar('train/grad_var_coff_alphas_scene{}'.format(scene_id), grad_var_coff_alphas.detach().item(),global_step=iteration)
         if (iteration + 1 >= loss_hyperparam['dis_start_ftloss_iter']) and  (iteration + 1 < loss_hyperparam['dis_end_ftloss_iter']):
             assert (tea_rgb_maps.shape == stu_rgb_maps.shape), 'app_feat size dont match between student and teacher'
             ftloss = loss_hyperparam['dis_ftloss_weight'] * torch.mean((stu_rgb_maps - tea_rgb_maps) ** 2)
             total_loss += ftloss
-            summary_writer.add_scalar('train/ftloss', ftloss.detach().item(), global_step=iteration)
-        summary_writer.add_scalar('train/total_loss', total_loss.detach().item(), global_step=iteration)
+            summary_writer.add_scalar('train/ftloss_scene{}'.format(scene_id), ftloss.detach().item(), global_step=iteration)
+        summary_writer.add_scalar('train/total_loss_scene{}'.format(scene_id), total_loss.detach().item(), global_step=iteration)
         optimizer.zero_grad()
         total_loss.backward()
         optimizer.step()
@@ -286,9 +292,9 @@ def distill(args):
         # for name, param in stu_model.app_linear.named_parameters():
         #     summary_writer.add_scalar(f"sdf_gradient/{name}_grad_norm_app_linear", torch.norm(param.grad), iteration)
 
-        summary_writer.add_scalar('train/PSNR', PSNRs[-1], global_step=iteration)
-        summary_writer.add_scalar('train/mse', mse, global_step=iteration)
-        summary_writer.add_scalar('train/curr_loss', total_loss.detach().item(), global_step=iteration)
+        summary_writer.add_scalar('train/PSNR_scene{}'.format(scene_id), PSNRs[-1], global_step=iteration)
+        summary_writer.add_scalar('train/mse_scene{}'.format(scene_id), mse, global_step=iteration)
+        summary_writer.add_scalar('train/curr_loss_scene{}'.format(scene_id), total_loss.detach().item(), global_step=iteration)
         # Print the current values of the losses.
         if iteration % args.progress_refresh_rate == 0:
             pbar.set_description(
