@@ -69,7 +69,7 @@ def Stu_vanilla_renderer( stu_model, rays_sampled, xyz_sampled, viewdir_sampled,
         app_feats.append(app_feat)
     return torch.cat(rgb_maps), torch.cat(depth_maps), torch.cat(rgbs), torch.cat(sigmas), torch.cat(alphas), None, torch.cat(app_feats)
 
-def Stu_vanilla_renderer_test(rays, stu_model, chunk=4096, N_samples=-1, ndc_ray=False, white_bg=True, is_train=False, device='cuda'):
+def Stu_vanilla_renderer_test(rays, stu_model, chunk=4096, N_samples=-1, ndc_ray=False, white_bg=True, is_train=False, device='cuda',scene_id = 0):
     rgbs, alphas, depth_maps, weights, uncertainties = [], [], [], [], []
     N_rays_all = rays.shape[0]
     for chunk_idx in range(N_rays_all // chunk + int(N_rays_all % chunk > 0)):
@@ -84,7 +84,7 @@ def Stu_vanilla_renderer_test(rays, stu_model, chunk=4096, N_samples=-1, ndc_ray
         rgb_map, depth_map, _, _, _, _, _, _, _ = stu_model(rays_chunk, xyz_sampled, viewdirs, z_vals, ray_valid,
                                                                                                  is_train=is_train,
                                                                                                  white_bg=white_bg,
-                                                                                                 ndc_ray=ndc_ray,
+                                                                                                 ndc_ray=ndc_ray,scene_id = scene_id
                                                                                                  )
 
         rgbs.append(rgb_map)

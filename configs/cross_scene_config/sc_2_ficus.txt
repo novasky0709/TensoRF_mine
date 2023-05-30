@@ -1,0 +1,62 @@
+
+dataset_name = blender
+datadir = /home/yuze/devdata/project/dataset/nerf_synthetic/ficus
+expname =  SC_1_ficus
+basedir = ./log
+
+n_iters = 30000
+N_voxel_init = 2097156 # 128**3
+N_voxel_final = 27000000 # 300**3
+upsamp_list = [2000,3000,4000,5500,7000]
+update_AlphaMask_list = [999999999]
+
+N_vis = 5
+vis_every = 200000
+
+render_test = 1
+
+n_lamb_sigma = [16,16,16]
+n_lamb_sh = [48,48,48]
+model_name = TensorVMSplit
+
+
+shadingMode = MLP_Fea
+fea2denseAct = softplus
+
+view_pe = 2
+fea_pe = 2
+
+L1_weight_inital = 8e-5
+L1_weight_rest = 4e-5
+rm_weight_mask_thre = 1e-4
+
+dis_lr_init = 8e-5 # 8e-5
+dis_n_iters = 600000
+batch_size = 128
+dis_batch_size = 128
+dis_start_appfeatloss_iter = -1
+dis_end_appfeatloss_iter = -1
+dis_appfeatloss_weight = 1
+dis_start_rfloss_iter = -1
+dis_end_rfloss_iter = -1
+dis_rfloss_weight = 1
+dis_start_ftloss_iter = 0
+dis_end_ftloss_iter = -1
+dis_ftloss_weight = 1
+
+
+dis_vis_every = 20000
+dis_N_vis = 1
+
+dis_network_pos_pe = 10
+dis_network_dir_pe = 4
+dis_network_z_dim = 16
+dis_network_c_dim = 15
+
+dis_reconstruction = True
+ckpt =./log/0TensoRF_model/ficus.th
+stu_model_name = CrossSceneHypernetVanillaNeRF
+sc_datadir_list = [/home/yuze/devdata/project/dataset/nerf_synthetic/lego]
+sc_ckpt_list = [./log/0TensoRF_model/lego.th]
+sc_switch_iter = 100
+# student_ckpt = ./log/tensorf_lego_dis_05120/distill_tensorf_lego_dis_05120_173999.th

@@ -50,62 +50,65 @@ def evaluation_student_model(test_dataset,stu_model, args, stu_renderer, savePat
         tqdm._instances.clear()
     except Exception:
         pass
+    for scene_id in range(len(test_dataset)):
+        PSNRs, rgb_maps, depth_maps = [], [], []
+        ssims, l_alex, l_vgg = [], [], []
+        near_far = test_dataset[scene_id].near_far
+        img_eval_interval = 1 if N_vis < 0 else max(test_dataset[scene_id].all_rays.shape[0] // N_vis,1)
+        idxs = list(range(0, test_dataset[scene_id].all_rays.shape[0], img_eval_interval))
+        for idx, samples in tqdm(enumerate(test_dataset[scene_id].all_rays[0::img_eval_interval]), file=sys.stdout):
+            W, H = test_dataset[scene_id].img_wh
+            rays = samples.view(-1,samples.shape[-1])
+            rgb_map, _, depth_map, _, _ = stu_renderer_test(rays, stu_model, chunk=args.dis_batch_size, N_samples=N_samples,
+                                        ndc_ray=ndc_ray, white_bg = white_bg, device=device,scene_id = scene_id)
+            rgb_map = rgb_map.clamp(0.0, 1.0)
 
-    near_far = test_dataset.near_far
-    img_eval_interval = 1 if N_vis < 0 else max(test_dataset.all_rays.shape[0] // N_vis,1)
-    idxs = list(range(0, test_dataset.all_rays.shape[0], img_eval_interval))
-    for idx, samples in tqdm(enumerate(test_dataset.all_rays[0::img_eval_interval]), file=sys.stdout):
+            rgb_map, depth_map = rgb_map.reshape(H, W, 3).cpu(), depth_map.reshape(H, W).cpu()
 
-        W, H = test_dataset.img_wh
-        rays = samples.view(-1,samples.shape[-1])
+            depth_map, _ = visualize_depth_numpy(depth_map.numpy(),near_far)
+            if len(test_dataset[scene_id].all_rgbs):
+                gt_rgb = test_dataset[scene_id].all_rgbs[idxs[idx]].view(H, W, 3)
+                loss = torch.mean((rgb_map - gt_rgb) ** 2)
+                PSNRs.append(-10.0 * np.log(loss.item()) / np.log(10.0))
+            rgb_map = (rgb_map.numpy() * 255).astype('uint8')
+            # rgb_map = np.concatenate((rgb_map, depth_map), axis=1)
+            rgb_maps.append(rgb_map)
+            depth_maps.append(depth_map)
+            if savePath is not None:
+                imageio.imwrite(f'{savePath}/{prtx}_scene{scene_id}_{idx:03d}.png', rgb_map)
+                rgb_map = np.concatenate((rgb_map, depth_map), axis=1)
+                imageio.imwrite(f'{savePath}/rgbd/_scene{scene_id}_{prtx}{idx:03d}.png', rgb_map)
 
-        rgb_map, _, depth_map, _, _ = stu_renderer_test(rays, stu_model, chunk=args.dis_batch_size, N_samples=N_samples,
-                                        ndc_ray=ndc_ray, white_bg = white_bg, device=device)
-        rgb_map = rgb_map.clamp(0.0, 1.0)
+        imageio.mimwrite(f'{savePath}/{prtx}_scene{scene_id}_video.mp4', np.stack(rgb_maps), fps=30, quality=10)
+        imageio.mimwrite(f'{savePath}/{prtx}_scene{scene_id}_depthvideo.mp4', np.stack(depth_maps), fps=30, quality=10)
 
-        rgb_map, depth_map = rgb_map.reshape(H, W, 3).cpu(), depth_map.reshape(H, W).cpu()
-
-        depth_map, _ = visualize_depth_numpy(depth_map.numpy(),near_far)
-        if len(test_dataset.all_rgbs):
-            gt_rgb = test_dataset.all_rgbs[idxs[idx]].view(H, W, 3)
-            loss = torch.mean((rgb_map - gt_rgb) ** 2)
-            PSNRs.append(-10.0 * np.log(loss.item()) / np.log(10.0))
-        rgb_map = (rgb_map.numpy() * 255).astype('uint8')
-        # rgb_map = np.concatenate((rgb_map, depth_map), axis=1)
-        rgb_maps.append(rgb_map)
-        depth_maps.append(depth_map)
-        if savePath is not None:
-            imageio.imwrite(f'{savePath}/{prtx}{idx:03d}.png', rgb_map)
-            rgb_map = np.concatenate((rgb_map, depth_map), axis=1)
-            imageio.imwrite(f'{savePath}/rgbd/{prtx}{idx:03d}.png', rgb_map)
-
-    imageio.mimwrite(f'{savePath}/{prtx}video.mp4', np.stack(rgb_maps), fps=30, quality=10)
-    imageio.mimwrite(f'{savePath}/{prtx}depthvideo.mp4', np.stack(depth_maps), fps=30, quality=10)
-
-    if PSNRs:
-        psnr = np.mean(np.asarray(PSNRs))
-        if compute_extra_metrics:
-            ssim = np.mean(np.asarray(ssims))
-            l_a = np.mean(np.asarray(l_alex))
-            l_v = np.mean(np.asarray(l_vgg))
-            np.savetxt(f'{savePath}/{prtx}mean.txt', np.asarray([psnr, ssim, l_a, l_v]))
-        else:
-            np.savetxt(f'{savePath}/{prtx}mean.txt', np.asarray([psnr]))
-
-
+        if PSNRs:
+            psnr = np.mean(np.asarray(PSNRs))
+            if compute_extra_metrics:
+                ssim = np.mean(np.asarray(ssims))
+                l_a = np.mean(np.asarray(l_alex))
+                l_v = np.mean(np.asarray(l_vgg))
+                np.savetxt(f'{savePath}/{prtx}_scene{scene_id}_mean.txt', np.asarray([psnr, ssim, l_a, l_v]))
+            else:
+                np.savetxt(f'{savePath}/{prtx}_scene{scene_id}_mean.txt', np.asarray([psnr]))
     return PSNRs
 
 def distill(args):
     # init dataset
-    len_fitted_scene = len(args.sc_datadir_list)
+    print(args.sc_datadir_list)
+    if args.sc_datadir_list is None:
+        len_fitted_scene = 0
+    else:
+        len_fitted_scene = len(args.sc_datadir_list)
     print('{} scenes have been fit.'.format(len_fitted_scene))
     train_dataset = []
     test_dataset = []
-    for datadir in args.sc_datadir_list:
-        print('Loading {}'.format(datadir))
-        dataset = dataset_dict[args.dataset_name]
-        train_dataset.append(dataset(datadir, split='train', downsample=args.downsample_train, is_stack=False))
-        test_dataset.append(dataset(datadir, split='test', downsample=args.downsample_train, is_stack=True))
+    if len_fitted_scene !=0:
+        for datadir in args.sc_datadir_list:
+            print('Loading {}'.format(datadir))
+            dataset = dataset_dict[args.dataset_name]
+            train_dataset.append(dataset(datadir, split='train', downsample=args.downsample_train, is_stack=False))
+            test_dataset.append(dataset(datadir, split='test', downsample=args.downsample_train, is_stack=True))
     dataset = dataset_dict[args.dataset_name]
     train_dataset.append(dataset(args.datadir, split='train', downsample=args.downsample_train, is_stack=False))
     test_dataset.append(dataset(args.datadir, split='test', downsample=args.downsample_train, is_stack=True))
@@ -134,17 +137,18 @@ def distill(args):
     # reso_cur = N_to_reso(args.N_voxel_init, aabb)
     # nSamples = min(args.nSamples, cal_n_samples(reso_cur,
     #                                             args.step_ratio))  # sqrt(128**2+128**2+128**2)/step(0.5)=443, nSample never more than 443 samples for one pixel
-    if len(args.sc_ckpt_list) != len_fitted_scene:
+    if len_fitted_scene!=0 and len(args.sc_ckpt_list) != len_fitted_scene:
         print('args.sc_ckpt_list doesnt match args.datadir_list. CHECK!')
         return
     tensorf_teas = []
-    for ckpt_name in args.sc_ckpt_list:
-        ckpt = torch.load(ckpt_name, map_location=device)
-        kwargs = ckpt['kwargs']
-        kwargs.update({'device': device})
-        tensorf_tea = eval(args.model_name+"_Distill")(**kwargs)
-        tensorf_tea.load(ckpt)
-        tensorf_teas.append(tensorf_tea)
+    if len_fitted_scene!= 0:
+        for ckpt_name in args.sc_ckpt_list:
+            ckpt = torch.load(ckpt_name, map_location=device)
+            kwargs = ckpt['kwargs']
+            kwargs.update({'device': device})
+            tensorf_tea = eval(args.model_name+"_Distill")(**kwargs)
+            tensorf_tea.load(ckpt)
+            tensorf_teas.append(tensorf_tea)
 
     if not os.path.exists(args.ckpt):
         print('the ckpt path does not exists!!')
@@ -173,7 +177,7 @@ def distill(args):
         stu_args = {'distance_scale':tensorf_tea.distance_scale,'rayMarch_weight_thres':ckpt['kwargs']['rayMarch_weight_thres'],\
                 'aabb':tensorf_tea.aabb,'gridSize':tensorf_tea.gridSize,'near_far' : tensorf_tea.near_far
                 ,'density_shift':tensorf_tea.density_shift,'step_ratio':tensorf_tea.step_ratio,'device':device
-                ,'pos_pe':args.dis_network_pos_pe,'dir_pe':args.dis_network_dir_pe,'z_dim':args.dis_network_z_dim, 'c_dim':args.dis_network_c_dim, }
+                ,'pos_pe':args.dis_network_pos_pe,'dir_pe':args.dis_network_dir_pe,'z_dim':args.dis_network_z_dim, 'c_dim':args.dis_network_c_dim,'scene_num':len_fitted_scene + 1 }
     stu_model = eval(args.stu_model_name)(**stu_args)
     if args.student_ckpt is not None :
         stu_model.load(stu_ckpt)
@@ -289,6 +293,7 @@ def distill(args):
         if iteration % args.progress_refresh_rate == 0:
             pbar.set_description(
                 f'Iteration {iteration:05d}:'
+                + f'current_scene_id: [{scene_id:02d}]'
                 + f' curr_loss = {float(total_loss.detach().item()):.2f}'
                 + f' train_psnr = {float(np.mean(PSNRs)):.2f}'
                 + f' test_psnr = {float(np.mean(PSNRs_test)):.2f}'
