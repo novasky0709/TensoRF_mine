@@ -109,8 +109,8 @@ class CrossSceneHypernetVanillaNeRF(BaseNeRF):
 
         if ray_valid.any():
             x = input_pos
-            for i,l in enumerate(self.encoder_list[scene_id]):
-                w, b = self.encoder_list[scene_id][i](self.z_space_list[scene_id].z_list[i],scene_id)
+            for i,l in enumerate(self.encoder):
+                w, b = self.encoder[i](self.z_space_list[scene_id].z_list[i],scene_id)
                 x = torch.matmul(x,w) + b
                 x = F.relu(x)
                 if i in [self.D // 2]:
@@ -147,13 +147,15 @@ class CrossSceneHypernetVanillaNeRF(BaseNeRF):
        self.encoder_list = torch.nn.ModuleList()
        self.density_linear_list = torch.nn.ModuleList()
        self.app_linear_list = torch.nn.ModuleList()
+       self.encoder = nn.ModuleList([HyperMLP(self.z_dim, pos_dim_pe, self.W, self.c_dim, self.scene_num)] + \
+                               [HyperMLP(self.z_dim, self.W, self.W, self.c_dim, self.scene_num) if (
+                                           i not in [self.D // 2]) else
+                                HyperMLP(self.z_dim, self.W + pos_dim_pe, self.W, self.c_dim, self.scene_num) for i in
+                                range(self.D - 1)]
+                               )
        for scene_id in range(self.scene_num):
            self.z_space_list.append(Embedding(self.D + 4, self.z_dim))
-           encoder = nn.ModuleList([HyperMLP(self.z_dim, pos_dim_pe, self.W, self.c_dim,self.scene_num)] + \
-                                    [HyperMLP(self.z_dim,self.W, self.W, self.c_dim,self.scene_num) if (i not in [self.D // 2]) else
-                                     HyperMLP(self.z_dim,self.W + pos_dim_pe, self.W, self.c_dim,self.scene_num) for i in range(self.D - 1)]
-                                    )
-           self.encoder_list.append(encoder)
+
            density_linear = nn.Linear(self.W, 1)
            torch.nn.init.constant_(density_linear.bias, 0.0)
            torch.nn.init.normal_(density_linear.weight, 0.0, np.sqrt(2) / np.sqrt(1))

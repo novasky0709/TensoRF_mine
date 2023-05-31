@@ -167,7 +167,11 @@ def distill(args):
         stu_ckpt = torch.load(args.student_ckpt, map_location=device)
         stu_args = stu_ckpt['kwargs']
         stu_args.update({'device': device})
+        stu_args.update({'scene_num': len_fitted_scene + 1})
     else:
+        if len_fitted_scene > 0:
+            print('Errpr ,fitted scene > 1,however no ckpt loaded.SET stu_ckpt path first')
+            exit()
         print('Distill the student model from scratch!!!!')
         # Vanilla NeRF
         # stu_args = {'distance_scale':tensorf_tea.distance_scale,'rayMarch_weight_thres':ckpt['kwargs']['rayMarch_weight_thres'],\
@@ -177,7 +181,7 @@ def distill(args):
         stu_args = {'distance_scale':tensorf_tea.distance_scale,'rayMarch_weight_thres':ckpt['kwargs']['rayMarch_weight_thres'],\
                 'aabb':tensorf_tea.aabb,'gridSize':tensorf_tea.gridSize,'near_far' : tensorf_tea.near_far
                 ,'density_shift':tensorf_tea.density_shift,'step_ratio':tensorf_tea.step_ratio,'device':device
-                ,'pos_pe':args.dis_network_pos_pe,'dir_pe':args.dis_network_dir_pe,'z_dim':args.dis_network_z_dim, 'c_dim':args.dis_network_c_dim,'scene_num':len_fitted_scene + 1 }
+                ,'pos_pe':args.dis_network_pos_pe,'dir_pe':args.dis_network_dir_pe,'z_dim':args.dis_network_z_dim, 'c_dim':args.dis_network_c_dim,'scene_num':(len_fitted_scene + 1) }
     stu_model = eval(args.stu_model_name)(**stu_args)
     if len_fitted_scene > 0:
         if args.student_ckpt is None:
