@@ -58,5 +58,5 @@ ckpt =./log/0TensoRF_model/ficus.th
 stu_model_name = CrossSceneHypernetVanillaNeRF
 sc_datadir_list = [/home/yuze/devdata/project/dataset/nerf_synthetic/lego]
 sc_ckpt_list = [./log/0TensoRF_model/lego.th]
-sc_switch_iter = 10
+sc_switch_iter = 100
 student_ckpt = ./log/SC_0_lego_0/distill_SC_0_lego_419999.th

@@ -144,7 +144,6 @@ class CrossSceneHypernetVanillaNeRF(BaseNeRF):
 
     def init_nn(self,pos_dim_pe, dir_dim_pe):
        self.z_space_list = torch.nn.ModuleList()
-       self.encoder_list = torch.nn.ModuleList()
        self.density_linear_list = torch.nn.ModuleList()
        self.app_linear_list = torch.nn.ModuleList()
        self.encoder = nn.ModuleList([HyperMLP(self.z_dim, pos_dim_pe, self.W, self.c_dim, self.scene_num)] + \
@@ -154,7 +153,7 @@ class CrossSceneHypernetVanillaNeRF(BaseNeRF):
                                 range(self.D - 1)]
                                )
        for scene_id in range(self.scene_num):
-           self.z_space_list.append(Embedding(self.D + 4, self.z_dim))
+           self.z_space_list.append(Embedding(self.D , self.z_dim))
 
            density_linear = nn.Linear(self.W, 1)
            torch.nn.init.constant_(density_linear.bias, 0.0)
@@ -171,7 +170,7 @@ class CrossSceneHypernetVanillaNeRF(BaseNeRF):
            self.app_linear_list.append(app_linear)
     def get_optparam_groups(self, lr_init_network = 0.001):
         # {'params': self.z_space.z_list, 'lr': lr_init_network},
-        grad_vars = [ {'params': self.encoder_list.parameters(), 'lr': lr_init_network},
+        grad_vars = [ {'params': self.encoder.parameters(), 'lr': lr_init_network},
                          {'params': self.density_linear_list.parameters(), 'lr':lr_init_network},{'params': self.app_linear_list.parameters(), 'lr':lr_init_network}]
         return grad_vars
 
