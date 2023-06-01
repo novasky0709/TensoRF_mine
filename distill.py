@@ -231,7 +231,7 @@ def distill(args):
             summary_writer.add_scalar('train/grad_var_coff_alphas', grad_var_coff_alphas.detach().item(),global_step=iteration)
         if (iteration + 1 >= loss_hyperparam['dis_start_ftloss_iter']) and  (iteration + 1 < loss_hyperparam['dis_end_ftloss_iter']):
             assert (tea_rgb_maps.shape == stu_rgb_maps.shape), 'app_feat size dont match between student and teacher'
-            ftloss = loss_hyperparam['dis_ftloss_weight'] * torch.mean((stu_rgb_maps - tea_rgb_maps) ** 2)
+            ftloss = loss_hyperparam['dis_ftloss_weight'] * torch.mean((stu_rgb_maps - rgb_train) ** 2)
             total_loss += ftloss
             summary_writer.add_scalar('train/ftloss', ftloss.detach().item(), global_step=iteration)
         summary_writer.add_scalar('train/total_loss', total_loss.detach().item(), global_step=iteration)

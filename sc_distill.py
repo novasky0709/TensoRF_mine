@@ -230,7 +230,7 @@ def distill(args):
 
     # if not args.ndc_ray:
     #     allrays, allrgbs = tensorf_tea.filtering_rays(allrays, allrgbs, bbox_only=True)
-    trainingSampler = SimpleSampler(train_dataset[0].all_rays.shape[0], args.batch_size)
+    trainingSampler = SimpleSampler(train_dataset[len_fitted_scene].all_rays.shape[0], args.batch_size)
 
 
     pbar = tqdm(range(args.dis_n_iters), miniters=args.progress_refresh_rate, file=sys.stdout)
@@ -238,6 +238,7 @@ def distill(args):
         scene_id = int(( iteration / args.sc_switch_iter) % (len_fitted_scene + 1))
         ray_idx = trainingSampler.nextids()
         rays_train, rgb_train = train_dataset[scene_id].all_rays[ray_idx].to(device), train_dataset[scene_id].all_rgbs[ray_idx].to(device)
+
         # data example:
         # rays_train [4096,6], rgb_train [4096,3], rgb_maps [4096,3] depth_maps [4096]
         with torch.no_grad():
@@ -248,7 +249,16 @@ def distill(args):
             #e.g. rgb_maps [4096,3];depth_maps [4096]; rgbs [4096,443,3]; sigmas,alphas: [4096,443]
             # app_feats [19817,27]->youwenti xyz_sampled [4096,443,3]; z_vals [4096,443]; ray_valid [4096,443]
         stu_rgb_maps, stu_depth_maps, stu_rgbs, stu_sigmas, stu_alphas, _, stu_app_feats = stu_renderer(stu_model, rays_train, xyz_sampled, viewdirs, z_vals, ray_valid,  chunk=args.dis_batch_size,  ndc_ray=ndc_ray, white_bg = white_bg, is_train=True, device = device,scene_id = scene_id)
-
+        # test whether switch model right
+        # img = (rgb_train.cpu().numpy().reshape(16, 8, 3) * 255).astype('uint8')
+        # img = cv2.resize(img,(320,640))
+        # imageio.imwrite('/home/yuze/Downloads/GT_{}.jpg'.format(iteration),img)
+        # img = (tea_rgb_maps.cpu().numpy().reshape(16, 8, 3) * 255).astype('uint8')
+        # img = cv2.resize(img,(320,640))
+        # imageio.imwrite('/home/yuze/Downloads/tea_rgb_maps_{}.jpg'.format(iteration),img)
+        # img = (stu_rgb_maps.detach().cpu().numpy().reshape(16, 8, 3) * 255).astype('uint8')
+        # img = cv2.resize(img,(320,640))
+        # imageio.imwrite('/home/yuze/Downloads/stu_rgb_maps_{}.jpg'.format(iteration),img)
         # loss
         total_loss = 0
         # cauculate loss
@@ -259,16 +269,17 @@ def distill(args):
             summary_writer.add_scalar('train/appfeatloss_scene{}'.format(scene_id), appfeatloss.detach().item(), global_step=iteration)
         if (iteration + 1 >= loss_hyperparam['dis_start_rfloss_iter']) and  (iteration + 1 < loss_hyperparam['dis_end_rfloss_iter']):
             assert (tea_sigmas.shape == stu_sigmas.shape) and (tea_rgbs.shape == stu_rgbs.shape), 'app_feat size dont match between student and teacher'
-            rfloss = loss_hyperparam['dis_rfloss_weight'] * (1/(2*grad_var_coff_alphas*grad_var_coff_alphas)*torch.mean((tea_alphas[ray_valid] - stu_alphas[ray_valid]) ** 2) + \
-                                                             1/(2*grad_var_coff_rgbs*grad_var_coff_rgbs)* torch.mean((tea_rgbs[ray_valid] - stu_rgbs[ray_valid]) **2) + torch.log(grad_var_coff_alphas * grad_var_coff_rgbs) )
-            total_loss += rfloss
+            # rfloss = loss_hyperparam['dis_rfloss_weight'] * (1/(2*grad_var_coff_alphas*grad_var_coff_alphas)*torch.mean((tea_alphas[ray_valid] - stu_alphas[ray_valid]) ** 2) + \
+            #                                                  1/(2*grad_var_coff_rgbs*grad_var_coff_rgbs)* torch.mean((tea_rgbs[ray_valid] - stu_rgbs[ray_valid]) **2) + torch.log(grad_var_coff_alphas * grad_var_coff_rgbs) )
+            rfloss = torch.mean((tea_alphas[ray_valid] - stu_alphas[ray_valid]) ** 2) + 1.5* torch.mean((tea_rgbs[ray_valid] - stu_rgbs[ray_valid]) **2)
+            total_loss += (1/3)*rfloss
             summary_writer.add_scalar('train/rfloss_scene{}'.format(scene_id), rfloss.detach().item(), global_step=iteration)
             summary_writer.add_scalar('train/grad_var_coff_rgbs_scene{}'.format(scene_id),grad_var_coff_rgbs.detach().item(),global_step=iteration)
             summary_writer.add_scalar('train/grad_var_coff_alphas_scene{}'.format(scene_id), grad_var_coff_alphas.detach().item(),global_step=iteration)
         if (iteration + 1 >= loss_hyperparam['dis_start_ftloss_iter']) and  (iteration + 1 < loss_hyperparam['dis_end_ftloss_iter']):
             assert (tea_rgb_maps.shape == stu_rgb_maps.shape), 'app_feat size dont match between student and teacher'
-            ftloss = loss_hyperparam['dis_ftloss_weight'] * torch.mean((stu_rgb_maps - tea_rgb_maps) ** 2)
-            total_loss += ftloss
+            ftloss = loss_hyperparam['dis_ftloss_weight'] * torch.mean((stu_rgb_maps - rgb_train) ** 2)
+            total_loss +=  ftloss
             summary_writer.add_scalar('train/ftloss_scene{}'.format(scene_id), ftloss.detach().item(), global_step=iteration)
         summary_writer.add_scalar('train/total_loss_scene{}'.format(scene_id), total_loss.detach().item(), global_step=iteration)
         optimizer.zero_grad()
