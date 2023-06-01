@@ -152,6 +152,7 @@ class CrossSceneHypernetVanillaNeRF(BaseNeRF):
                                 HyperMLP(self.z_dim, self.W + pos_dim_pe, self.W, self.c_dim, self.scene_num) for i in
                                 range(self.D - 1)]
                                )
+
        for scene_id in range(self.scene_num):
            self.z_space_list.append(Embedding(self.D , self.z_dim))
 
