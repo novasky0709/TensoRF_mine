@@ -79,8 +79,8 @@ def evaluation_student_model(test_dataset,stu_model, args, stu_renderer, savePat
                 rgb_map = np.concatenate((rgb_map, depth_map), axis=1)
                 imageio.imwrite(f'{savePath}/rgbd/_scene{scene_id}_{prtx}{idx:03d}.png', rgb_map)
 
-        imageio.mimwrite(f'{savePath}/{prtx}_scene{scene_id}_video.mp4', np.stack(rgb_maps), fps=30, quality=10)
-        imageio.mimwrite(f'{savePath}/{prtx}_scene{scene_id}_depthvideo.mp4', np.stack(depth_maps), fps=30, quality=10)
+        # imageio.mimwrite(f'{savePath}/{prtx}_scene{scene_id}_video.mp4', np.stack(rgb_maps), fps=30, quality=10)
+        # imageio.mimwrite(f'{savePath}/{prtx}_scene{scene_id}_depthvideo.mp4', np.stack(depth_maps), fps=30, quality=10)
 
         if PSNRs:
             psnr = np.mean(np.asarray(PSNRs))
@@ -235,7 +235,13 @@ def distill(args):
 
     pbar = tqdm(range(args.dis_n_iters), miniters=args.progress_refresh_rate, file=sys.stdout)
     for iteration in pbar:
-        scene_id = int(( iteration / args.sc_switch_iter) % (len_fitted_scene + 1))
+        # if iteration > 2000:
+        #
+        #     iteration = iteration +1 -1
+        if iteration < 20000:
+            scene_id = len_fitted_scene
+        else:
+            scene_id = int(( iteration / args.sc_switch_iter ) % (len_fitted_scene + 1))
         ray_idx = trainingSampler.nextids()
         rays_train, rgb_train = train_dataset[scene_id].all_rays[ray_idx].to(device), train_dataset[scene_id].all_rgbs[ray_idx].to(device)
 
@@ -272,7 +278,7 @@ def distill(args):
             # rfloss = loss_hyperparam['dis_rfloss_weight'] * (1/(2*grad_var_coff_alphas*grad_var_coff_alphas)*torch.mean((tea_alphas[ray_valid] - stu_alphas[ray_valid]) ** 2) + \
             #                                                  1/(2*grad_var_coff_rgbs*grad_var_coff_rgbs)* torch.mean((tea_rgbs[ray_valid] - stu_rgbs[ray_valid]) **2) + torch.log(grad_var_coff_alphas * grad_var_coff_rgbs) )
             if torch.rand(1) < (iteration/args.dis_n_iters) +0.45:
-                rfloss = torch.mean((tea_alphas[rgb_train.sum(dim=-1) != 3] - stu_alphas[rgb_train.sum(dim=-1) != 3]) **2) + 1.5* torch.mean((tea_rgbs[rgb_train.sum(dim=-1) != 3] - stu_rgbs[rgb_train.sum(dim=-1) != 3]) **2)
+                rfloss = torch.mean((tea_alphas[rgb_train.sum(dim=-1) <2.9] - stu_alphas[rgb_train.sum(dim=-1) <2.9]) **2) + 1.5* torch.mean((tea_rgbs[rgb_train.sum(dim=-1) != 3] - stu_rgbs[rgb_train.sum(dim=-1) != 3]) **2)
             else:
                 rfloss = torch.mean((tea_alphas[ray_valid] - stu_alphas[ray_valid]) ** 2) + 1.5* torch.mean((tea_rgbs[ray_valid] - stu_rgbs[ray_valid]) **2)
             total_loss += (1/3)*rfloss
@@ -407,8 +413,8 @@ def test(args):
 
 if __name__ == '__main__':
     torch.set_default_dtype(torch.float32)
-    torch.manual_seed(20211202)
-    np.random.seed(20211202)
+    torch.manual_seed(20230601)
+    np.random.seed(20230601)
 
     args = config_parser()
     print(args)

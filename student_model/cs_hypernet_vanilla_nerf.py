@@ -172,7 +172,7 @@ class CrossSceneHypernetVanillaNeRF(BaseNeRF):
     def get_optparam_groups(self, lr_init_network = 0.001):
         # {'params': self.z_space.z_list, 'lr': lr_init_network},
         grad_vars = [ {'params': self.encoder.parameters(), 'lr': lr_init_network},
-                         {'params': self.density_linear_list.parameters(), 'lr':lr_init_network},{'params': self.app_linear_list.parameters(), 'lr':lr_init_network}]
+                         {'params': self.density_linear_list.parameters(), 'lr':lr_init_network},{'params': self.z_space_list.parameters(), 'lr':lr_init_network},{'params': self.app_linear_list.parameters(), 'lr':lr_init_network}]
         return grad_vars
 
     def get_kwargs(self):

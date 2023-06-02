@@ -40,7 +40,7 @@ dis_appfeatloss_weight = 1
 dis_start_rfloss_iter = 0
 dis_end_rfloss_iter = -1
 dis_rfloss_weight = 1
-dis_start_ftloss_iter = 0
+dis_start_ftloss_iter = -1
 dis_end_ftloss_iter = -1
 dis_ftloss_weight = 1
 
