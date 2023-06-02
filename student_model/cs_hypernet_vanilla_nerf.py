@@ -196,7 +196,8 @@ class CrossSceneHypernetVanillaNeRF(BaseNeRF):
 
     def load(self, ckpt):
         # we need re-implementation this function. e.g.
-        self.load_state_dict(ckpt['state_dict'],strict=False)
+        # self.load_state_dict(ckpt['state_dict'],strict=False)
+        missing, _ = self.load_state_dict(ckpt['state_dict'],strict=False)
 if __name__ == '__main__':
     # emb = Embedding(1,32)
     # hmlp = HyperMLP(z_dim = 32, in_size=256, out_size=64, K = 7)

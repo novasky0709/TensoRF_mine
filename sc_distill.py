@@ -271,14 +271,20 @@ def distill(args):
             assert (tea_sigmas.shape == stu_sigmas.shape) and (tea_rgbs.shape == stu_rgbs.shape), 'app_feat size dont match between student and teacher'
             # rfloss = loss_hyperparam['dis_rfloss_weight'] * (1/(2*grad_var_coff_alphas*grad_var_coff_alphas)*torch.mean((tea_alphas[ray_valid] - stu_alphas[ray_valid]) ** 2) + \
             #                                                  1/(2*grad_var_coff_rgbs*grad_var_coff_rgbs)* torch.mean((tea_rgbs[ray_valid] - stu_rgbs[ray_valid]) **2) + torch.log(grad_var_coff_alphas * grad_var_coff_rgbs) )
-            rfloss = torch.mean((tea_alphas[ray_valid] - stu_alphas[ray_valid]) ** 2) + 1.5* torch.mean((tea_rgbs[ray_valid] - stu_rgbs[ray_valid]) **2)
+            if torch.rand(1) < (iteration/args.dis_n_iters) +0.45:
+                rfloss = torch.mean((tea_alphas[rgb_train.sum(dim=-1) != 3] - stu_alphas[rgb_train.sum(dim=-1) != 3]) **2) + 1.5* torch.mean((tea_rgbs[rgb_train.sum(dim=-1) != 3] - stu_rgbs[rgb_train.sum(dim=-1) != 3]) **2)
+            else:
+                rfloss = torch.mean((tea_alphas[ray_valid] - stu_alphas[ray_valid]) ** 2) + 1.5* torch.mean((tea_rgbs[ray_valid] - stu_rgbs[ray_valid]) **2)
             total_loss += (1/3)*rfloss
             summary_writer.add_scalar('train/rfloss_scene{}'.format(scene_id), rfloss.detach().item(), global_step=iteration)
             summary_writer.add_scalar('train/grad_var_coff_rgbs_scene{}'.format(scene_id),grad_var_coff_rgbs.detach().item(),global_step=iteration)
             summary_writer.add_scalar('train/grad_var_coff_alphas_scene{}'.format(scene_id), grad_var_coff_alphas.detach().item(),global_step=iteration)
         if (iteration + 1 >= loss_hyperparam['dis_start_ftloss_iter']) and  (iteration + 1 < loss_hyperparam['dis_end_ftloss_iter']):
             assert (tea_rgb_maps.shape == stu_rgb_maps.shape), 'app_feat size dont match between student and teacher'
-            ftloss = loss_hyperparam['dis_ftloss_weight'] * torch.mean((stu_rgb_maps - rgb_train) ** 2)
+            if torch.rand(1) < (iteration / args.dis_n_iters)  +0.45:
+                ftloss = loss_hyperparam['dis_ftloss_weight'] * torch.mean((stu_rgb_maps[rgb_train.sum(dim=-1) != 3] - rgb_train[rgb_train.sum(dim=-1) != 3]) ** 2)
+            else:
+                ftloss = loss_hyperparam['dis_ftloss_weight'] * torch.mean((stu_rgb_maps - rgb_train) ** 2)
             total_loss +=  ftloss
             summary_writer.add_scalar('train/ftloss_scene{}'.format(scene_id), ftloss.detach().item(), global_step=iteration)
         summary_writer.add_scalar('train/total_loss_scene{}'.format(scene_id), total_loss.detach().item(), global_step=iteration)
