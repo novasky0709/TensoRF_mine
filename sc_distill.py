@@ -170,8 +170,8 @@ def distill(args):
         stu_args.update({'scene_num': len_fitted_scene + 1})
     else:
         if len_fitted_scene > 0:
-            print('Errpr ,fitted scene > 1,however no ckpt loaded.SET stu_ckpt path first')
-            exit()
+            print('Errpr ,fitted scene > 1,however no ckpt loaded.SET stu_ckpt path first. This will learn from scratch')
+            # exit()
         print('Distill the student model from scratch!!!!')
         # Vanilla NeRF
         # stu_args = {'distance_scale':tensorf_tea.distance_scale,'rayMarch_weight_thres':ckpt['kwargs']['rayMarch_weight_thres'],\
@@ -183,11 +183,9 @@ def distill(args):
                 ,'density_shift':tensorf_tea.density_shift,'step_ratio':tensorf_tea.step_ratio,'device':device
                 ,'pos_pe':args.dis_network_pos_pe,'dir_pe':args.dis_network_dir_pe,'z_dim':args.dis_network_z_dim, 'c_dim':args.dis_network_c_dim,'scene_num':(len_fitted_scene + 1) }
     stu_model = eval(args.stu_model_name)(**stu_args)
-    if len_fitted_scene > 0:
-        if args.student_ckpt is None:
-            print('fitted scene > 1 ,so you must indicate one args.student_ckpt')
-            exit()
-        stu_model.load(stu_ckpt)
+    if len_fitted_scene > 0 and args.student_ckpt is None:
+        print('fitted scene > 1 ,so you must indicate one args.student_ckpt,This will learn from scratch')
+        # exit()
     elif args.student_ckpt is not None :
         stu_model.load(stu_ckpt)
 
@@ -235,10 +233,8 @@ def distill(args):
 
     pbar = tqdm(range(args.dis_n_iters), miniters=args.progress_refresh_rate, file=sys.stdout)
     for iteration in pbar:
-        # if iteration > 2000:
-        #
-        #     iteration = iteration +1 -1
-        if iteration < 20000:
+        # if iteration < 20000:
+        if iteration < 0:
             scene_id = len_fitted_scene
         else:
             scene_id = int(( iteration / args.sc_switch_iter ) % (len_fitted_scene + 1))
