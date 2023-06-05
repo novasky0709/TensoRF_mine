@@ -168,6 +168,7 @@ def config_parser(cmd=None):
     parser.add_argument('--sc_datadir_list',type=str, action="append")
     parser.add_argument('--sc_ckpt_list', type=str, action="append")
     parser.add_argument('--sc_switch_iter', type=int, default=50)
+    parser.add_argument('--sc_switch_warmup_iter', type=int, default=10000)
     if cmd is not None:
         return parser.parse_args(cmd)
     else:

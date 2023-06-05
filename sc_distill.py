@@ -233,8 +233,8 @@ def distill(args):
 
     pbar = tqdm(range(args.dis_n_iters), miniters=args.progress_refresh_rate, file=sys.stdout)
     for iteration in pbar:
-        # if iteration < 20000:
-        if iteration < 0:
+
+        if iteration < args.sc_switch_warmup_iter:
             scene_id = len_fitted_scene
         else:
             scene_id = int(( iteration / args.sc_switch_iter ) % (len_fitted_scene + 1))
