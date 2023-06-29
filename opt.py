@@ -136,6 +136,8 @@ def config_parser(cmd=None):
                         help='dis_rgb_and_alpha_coff learning rate')
     parser.add_argument("--dis_lr_init", type=float, default=8e-5,
                         help='learning rate')
+    parser.add_argument("--dis_lr_init_paras", type=float, default=1e-3,
+                        help='learning rate')
     parser.add_argument("--dis_lr_decay_iters", type=int, default=-1,
                         help = 'number of iterations the lr will decay to the target ratio; -1 will set it to n_iters')
     parser.add_argument("--dis_lr_decay_target_ratio", type=float, default=0.1,

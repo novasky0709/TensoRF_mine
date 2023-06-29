@@ -14,6 +14,7 @@ import datetime
 from student_model.vanilla_nerf import VanillaNeRF
 from student_model.hypernet_vanilla_nerf import HypernetVanillaNeRF
 from student_model.cs_hypernet_vanilla_nerf import CrossSceneHypernetVanillaNeRF
+from student_model.cs_hypernet_vanilla_nerf_beta import CrossSceneHypernetVanillaNeRFBeta
 from dataLoader import dataset_dict
 import sys
 from models.tensoRF import TensorVMSplit_Distill
@@ -188,8 +189,9 @@ def distill(args):
         # exit()
     elif args.student_ckpt is not None :
         stu_model.load(stu_ckpt)
-
-    grad_vars = stu_model.get_optparam_groups(args.dis_lr_init)
+    stu_model.save(f'{logfolder}/distill_{args.expname}_{0}.th')
+    print('dis_lr_init;dis_lr_init_paras',args.dis_lr_init_paras,args.dis_lr_init_paras)
+    grad_vars = stu_model.get_optparam_groups(args.dis_lr_init,args.dis_lr_init_paras)
 
     if args.dis_lr_decay_iters > 0:
         lr_factor = args.dis_lr_decay_target_ratio ** (1 / args.dis_lr_decay_iters)
@@ -271,8 +273,8 @@ def distill(args):
             summary_writer.add_scalar('train/appfeatloss_scene{}'.format(scene_id), appfeatloss.detach().item(), global_step=iteration)
         if (iteration + 1 >= loss_hyperparam['dis_start_rfloss_iter']) and  (iteration + 1 < loss_hyperparam['dis_end_rfloss_iter']):
             assert (tea_sigmas.shape == stu_sigmas.shape) and (tea_rgbs.shape == stu_rgbs.shape), 'app_feat size dont match between student and teacher'
-            # rfloss = loss_hyperparam['dis_rfloss_weight'] * (1/(2*grad_var_coff_alphas*grad_var_coff_alphas)*torch.mean((tea_alphas[ray_valid] - stu_alphas[ray_valid]) ** 2) + \
-            #                                                  1/(2*grad_var_coff_rgbs*grad_var_coff_rgbs)* torch.mean((tea_rgbs[ray_valid] - stu_rgbs[ray_valid]) **2) + torch.log(grad_var_coff_alphas * grad_var_coff_rgbs) )
+            rfloss = loss_hyperparam['dis_rfloss_weight'] * (1/(2*grad_var_coff_alphas*grad_var_coff_alphas)*torch.mean((tea_alphas[ray_valid] - stu_alphas[ray_valid]) ** 2) + \
+                                                             1/(2*grad_var_coff_rgbs*grad_var_coff_rgbs)* torch.mean((tea_rgbs[ray_valid] - stu_rgbs[ray_valid]) **2) + torch.log(grad_var_coff_alphas * grad_var_coff_rgbs) )
             rfloss = torch.mean((tea_alphas[ray_valid] - stu_alphas[ray_valid]) ** 2) + 1.5 * torch.mean(
                 (tea_rgbs[ray_valid] - stu_rgbs[ray_valid]) ** 2)
             # if torch.rand(1) < (iteration/args.dis_n_iters) +0.45:
@@ -285,10 +287,10 @@ def distill(args):
             summary_writer.add_scalar('train/grad_var_coff_alphas_scene{}'.format(scene_id), grad_var_coff_alphas.detach().item(),global_step=iteration)
         if (iteration + 1 >= loss_hyperparam['dis_start_ftloss_iter']) and  (iteration + 1 < loss_hyperparam['dis_end_ftloss_iter']):
             assert (tea_rgb_maps.shape == stu_rgb_maps.shape), 'app_feat size dont match between student and teacher'
-            # if torch.rand(1) < (iteration / args.dis_n_iters)  +0.45:
-            #     ftloss = loss_hyperparam['dis_ftloss_weight'] * torch.mean((stu_rgb_maps[rgb_train.sum(dim=-1) != 3] - rgb_train[rgb_train.sum(dim=-1) != 3]) ** 2)
-            # else:
-            #     ftloss = loss_hyperparam['dis_ftloss_weight'] * torch.mean((stu_rgb_maps - rgb_train) ** 2)
+            if torch.rand(1) < (iteration / args.dis_n_iters)  +0.45 and iteration < 0.9 * args.dis_n_iters:
+                ftloss = loss_hyperparam['dis_ftloss_weight'] * torch.mean((stu_rgb_maps[rgb_train.sum(dim=-1) != 3] - rgb_train[rgb_train.sum(dim=-1) != 3]) ** 2)
+            else:
+                ftloss = loss_hyperparam['dis_ftloss_weight'] * torch.mean((stu_rgb_maps - rgb_train) ** 2)
             ftloss = loss_hyperparam['dis_ftloss_weight'] * torch.mean((stu_rgb_maps - rgb_train) ** 2)
             total_loss +=  ftloss
             summary_writer.add_scalar('train/ftloss_scene{}'.format(scene_id), ftloss.detach().item(), global_step=iteration)
@@ -308,7 +310,7 @@ def distill(args):
         if iteration in [loss_hyperparam['dis_end_appfeatloss_iter'], loss_hyperparam['dis_end_rfloss_iter'],loss_hyperparam['dis_end_ftloss_iter']]:
                 print("reset lr to initial")
                 lr_scale = 1 #0.1 ** (iteration / args.n_iters)
-                grad_vars = stu_model.get_optparam_groups(args.dis_lr_init)
+                grad_vars = stu_model.get_optparam_groups(args.dis_lr_init,args.dis_lr_init_paras)
                 optimizer = torch.optim.Adam(grad_vars, betas=(0.9, 0.99))
 
         # for name, param in stu_model.density_linear.named_parameters():
@@ -343,7 +345,7 @@ def distill(args):
 
     if args.dis_render_train:
         os.makedirs(f'{logfolder}/distill/imgs_train_all', exist_ok=True)
-        train_dataset = dataset(args.datadir, split='train', downsample=args.downsample_train, is_stack=True)
+        train_dataset = [dataset(args.datadir, split='train', downsample=args.downsample_train, is_stack=True)]
         PSNRs_test = evaluation_student_model(train_dataset, stu_model, args, stu_renderer, f'{logfolder}/distill/img_train_all/', N_vis=-1,
                                      N_samples=-1, white_bg=white_bg, ndc_ray=ndc_ray,
                                     compute_extra_metrics=False)
@@ -351,7 +353,7 @@ def distill(args):
 
     if args.render_test:
         os.makedirs(f'{logfolder}/distill/img_test_all', exist_ok=True)
-        test_dataset = dataset(args.datadir, split='test', downsample=args.downsample_train, is_stack=True)
+        test_dataset = [dataset(args.datadir, split='test', downsample=args.downsample_train, is_stack=True)]
         PSNRs_test = evaluation_student_model(test_dataset, stu_model, args, stu_renderer,
                                               f'{logfolder}/distill/img_test_all/', N_vis=-1,
                                               N_samples=-1, white_bg=white_bg, ndc_ray=ndc_ray,

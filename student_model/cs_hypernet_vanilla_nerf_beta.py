@@ -40,19 +40,15 @@ class HyperMLP(nn.Module):
         self.out_size = out_size
         self.in_size = in_size
         self.K = K
-        self.B_w_list = nn.ParameterList()
-        self.B_b_list = nn.ParameterList()
         self.C_w_list = nn.ParameterList()
         self.C_b_list = nn.ParameterList()
+        self.B_w = nn.Parameter(torch.rand(self.z_dim, (self.in_size) * self.K))
+        torch.nn.init.normal_(self.B_w, 0.0, np.sqrt(2) / np.sqrt((self.in_size) * self.K))
+
+        self.B_b = nn.Parameter(torch.rand((self.in_size) * self.K))
+        torch.nn.init.constant_(self.B_b, 0.0)
+
         for scene_id in range(scene_num):
-
-            B_w = nn.Parameter(torch.rand(self.z_dim, (self.in_size) * self.K))
-            torch.nn.init.normal_(B_w, 0.0, np.sqrt(2) / np.sqrt((self.in_size) * self.K))
-            self.B_w_list.append(B_w)
-
-            B_b = nn.Parameter(torch.rand((self.in_size) * self.K))
-            torch.nn.init.constant_(B_b, 0.0)
-            self.B_b_list .append(B_b)
 
             C_w = nn.Parameter(torch.rand(self.K , self.K))
             torch.nn.init.normal_(C_w, 0.0, np.sqrt(2) / np.sqrt(self.K))
@@ -69,7 +65,7 @@ class HyperMLP(nn.Module):
         torch.nn.init.constant_(self.W_b, 0.0)
     def forward(self, z,scene_id = 0):
 
-        B = torch.matmul(z, self.B_w_list[scene_id]) + self.B_b_list[scene_id]
+        B = torch.matmul(z, self.B_w) + self.B_b
         # B = F.tanh(B)
         B = B.view(self.in_size, self.K) # [in_size,K]
 
@@ -80,10 +76,10 @@ class HyperMLP(nn.Module):
         return mlp_para, self.W_b
 
 
-class CrossSceneHypernetVanillaNeRF(BaseNeRF):
+class CrossSceneHypernetVanillaNeRFBeta(BaseNeRF):
     def __init__(self, aabb, gridSize,scene_num, D = 8,W = 256, device = 'cuda:0',pos_pe = 10, dir_pe = 4,distance_scale =25, \
                  rayMarch_weight_thres = 0.0001, near_far=[2.0, 6.0], density_shift = -10,step_ratio = 0.5,z_num = 1, z_dim = 16, c_dim = 11):
-        super(CrossSceneHypernetVanillaNeRF,self).__init__(aabb, gridSize, density_shift, near_far, device, step_ratio, rayMarch_weight_thres, distance_scale)
+        super(CrossSceneHypernetVanillaNeRFBeta,self).__init__(aabb, gridSize, density_shift, near_far, device, step_ratio, rayMarch_weight_thres, distance_scale)
         self.scene_num = scene_num
         self.D = D
         self.W = W
@@ -208,36 +204,37 @@ if __name__ == '__main__':
     from models.tensoRF import TensorVMSplit_Distill
     args = config_parser()
     device = 'cuda:0'
-    len_fitted_scene = 3
-    args.ckpt = '/home/yuze/Documents/project/TensoRF/log/tensorf_lego_VM_nomsk.th'
-    ckpt = torch.load(args.ckpt, map_location=device)
-    kwargs = ckpt['kwargs']
-    kwargs.update({'device': device})
-    tensorf_tea = TensorVMSplit_Distill(**kwargs)
-    stu_args = {'scene_num':len_fitted_scene + 1,'distance_scale': tensorf_tea.distance_scale,
-                'rayMarch_weight_thres': ckpt['kwargs']['rayMarch_weight_thres'],
-                'aabb': tensorf_tea.aabb, 'gridSize': tensorf_tea.gridSize, 'near_far': tensorf_tea.near_far
-        , 'density_shift': tensorf_tea.density_shift, 'step_ratio': tensorf_tea.step_ratio, 'device': device
-        , 'pos_pe': args.dis_network_pos_pe, 'dir_pe': args.dis_network_dir_pe, 'z_dim': args.dis_network_z_dim,
-                'c_dim': args.dis_network_c_dim, }
-    stu_model = CrossSceneHypernetVanillaNeRF(**stu_args)
-    ckpt_student = torch.load('/home/yuze/Downloads/2_scene.th', map_location=device)
-    stu_model.load(ckpt_student)
-
-    rays_chunk = torch.rand([128,6] ,device = 'cuda:0')
-    xyz_chunk = torch.rand([128,1036,3] ,device = 'cuda:0')
-    viewdir_chunk = torch.rand([128,1036,3] ,device = 'cuda:0')
-    z_vals_chunk = torch.rand([128,1036] ,device = 'cuda:0')
-    ray_valid_chunk = z_vals_chunk>0
-    for id in range(3):
-        rgb_map, depth_map, rgb, sigma, alpha, weight, bg_weight, sigma_feat, app_feat = stu_model(rays_chunk, xyz_chunk, viewdir_chunk, z_vals_chunk, ray_valid_chunk,is_train=True, white_bg = True, ndc_ray=0,scene_id = id)
-        print(rgb_map.shape)
-        print(rgb.shape)
-        print(sigma.shape)
-    alpha_gt = torch.ones_like(alpha)
-    loss = torch.mean((alpha_gt - alpha)**2)
-    #loss = torch.log(sigma.sum())
-    loss.backward() # 63
+    len_fitted_scene = 0
+    for len_fitted_scene in range(3):
+        args.ckpt = '/home/yuze/Documents/project/TensoRF/log/0TensoRF_model/lego.th'
+        ckpt = torch.load(args.ckpt, map_location=device)
+        kwargs = ckpt['kwargs']
+        kwargs.update({'device': device})
+        tensorf_tea = TensorVMSplit_Distill(**kwargs)
+        stu_args = {'scene_num':len_fitted_scene + 1,'distance_scale': tensorf_tea.distance_scale,
+                    'rayMarch_weight_thres': ckpt['kwargs']['rayMarch_weight_thres'],
+                    'aabb': tensorf_tea.aabb, 'gridSize': tensorf_tea.gridSize, 'near_far': tensorf_tea.near_far
+            , 'density_shift': tensorf_tea.density_shift, 'step_ratio': tensorf_tea.step_ratio, 'device': device
+            , 'pos_pe': args.dis_network_pos_pe, 'dir_pe': args.dis_network_dir_pe, 'z_dim': args.dis_network_z_dim,
+                    'c_dim': args.dis_network_c_dim, }
+        stu_model = CrossSceneHypernetVanillaNeRFBeta(**stu_args)
+        # ckpt_student = torch.load('/home/yuze/Downloads/2_scene.th', map_location=device)
+        # stu_model.load(ckpt_student)
+        stu_model.save('/home/yuze/Downloads/{}_scenes.th'.format(len_fitted_scene))
+    # rays_chunk = torch.rand([128,6] ,device = 'cuda:0')
+    # xyz_chunk = torch.rand([128,1036,3] ,device = 'cuda:0')
+    # viewdir_chunk = torch.rand([128,1036,3] ,device = 'cuda:0')
+    # z_vals_chunk = torch.rand([128,1036] ,device = 'cuda:0')
+    # ray_valid_chunk = z_vals_chunk>0
+    # for id in range(len_fitted_scene + 1):
+    #     rgb_map, depth_map, rgb, sigma, alpha, weight, bg_weight, sigma_feat, app_feat = stu_model(rays_chunk, xyz_chunk, viewdir_chunk, z_vals_chunk, ray_valid_chunk,is_train=True, white_bg = True, ndc_ray=0,scene_id = id)
+    #     print(rgb_map.shape)
+    #     print(rgb.shape)
+    #     print(sigma.shape)
+    # alpha_gt = torch.ones_like(alpha)
+    # loss = torch.mean((alpha_gt - alpha)**2)
+    # #loss = torch.log(sigma.sum())
+    # loss.backward() # 63
 
     # output = hvn.get_optparam_groups()
     # print(output)
