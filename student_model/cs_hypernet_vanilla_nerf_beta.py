@@ -113,7 +113,8 @@ class CrossSceneHypernetVanillaNeRFBeta(BaseNeRF):
                     x = torch.cat([input_pos,x],dim = -1)
             hidden_feat = x
             # validsigma = F.softplus(self.density_linear(x) + self.density_shift)
-            validsigma = F.relu(self.density_linear_list[scene_id](x))
+            # validsigma = F.relu(self.density_linear_list[scene_id](x))
+            validsigma = F.relu(self.density_linear_list(x))
             sigma[ray_valid] = validsigma.squeeze(dim=-1)
             app_feat[ray_valid] = hidden_feat
         alpha, weight, bg_weight = raw2alpha(sigma, dists * self.distance_scale)  # distance_scale 25
@@ -121,10 +122,13 @@ class CrossSceneHypernetVanillaNeRFBeta(BaseNeRF):
 
         if app_mask.any():
             input_dir = self.dir_embed_fn(viewdir_sampled[app_mask])
-            x = self.app_linear_list[scene_id][0](app_feat[app_mask])
+            # x = self.app_linear_list[scene_id][0](app_feat[app_mask])
+            x = self.app_linear_list[0](app_feat[app_mask])
             app_feat_valid = torch.cat([input_dir, x], dim=-1)
-            x = F.relu(self.app_linear_list[scene_id][1](app_feat_valid))
-            valid_rgbs = torch.sigmoid(self.app_linear_list[scene_id][2](x))
+            # x = F.relu(self.app_linear_list[scene_id][1](app_feat_valid))
+            x = F.relu(self.app_linear_list[1](app_feat_valid))
+            # valid_rgbs = torch.sigmoid(self.app_linear_list[scene_id][2](x))
+            valid_rgbs = torch.sigmoid(self.app_linear_list[2](x))
             rgb[app_mask] = valid_rgbs
         acc_map = torch.sum(weight, -1)
         rgb_map = torch.sum(weight[..., None] * rgb, -2)
@@ -139,6 +143,30 @@ class CrossSceneHypernetVanillaNeRFBeta(BaseNeRF):
         # return sigma, app, hidden_feat
 
     def init_nn(self,pos_dim_pe, dir_dim_pe):
+       self.z_space_list = torch.nn.ModuleList()
+       self.encoder = nn.ModuleList([HyperMLP(self.z_dim, pos_dim_pe, self.W, self.c_dim, self.scene_num)] + \
+                               [HyperMLP(self.z_dim, self.W, self.W, self.c_dim, self.scene_num) if (
+                                           i not in [self.D // 2]) else
+                                HyperMLP(self.z_dim, self.W + pos_dim_pe, self.W, self.c_dim, self.scene_num) for i in
+                                range(self.D - 1)]
+                               )
+
+       for scene_id in range(self.scene_num):
+           self.z_space_list.append(Embedding(self.D , self.z_dim))
+
+       self.density_linear_list = nn.Linear(self.W, 1)
+       torch.nn.init.constant_(self.density_linear_list.bias, 0.0)
+       torch.nn.init.normal_(self.density_linear_list.weight, 0.0, np.sqrt(2) / np.sqrt(1))
+
+       self.app_linear_list = nn.ModuleList([nn.Linear(self.W, self.W)] + [nn.Linear(self.W + dir_dim_pe, self.W // 2)] + [nn.Linear(self.W // 2, 3)])
+       torch.nn.init.constant_(self.app_linear_list[0].bias, 0.0)
+       torch.nn.init.normal_(self.app_linear_list[0].weight, 0.0, np.sqrt(2) / np.sqrt(self.W))
+       torch.nn.init.constant_(self.app_linear_list[1].bias, 0.0)
+       torch.nn.init.normal_(self.app_linear_list[1].weight, 0.0, np.sqrt(2) / np.sqrt(self.W//2))
+       torch.nn.init.constant_(self.app_linear_list[2].bias, 0.0)
+       torch.nn.init.normal_(self.app_linear_list[2].weight, 0.0, np.sqrt(2) / np.sqrt(3))
+
+    def init_nn_b(self,pos_dim_pe, dir_dim_pe):
        self.z_space_list = torch.nn.ModuleList()
        self.density_linear_list = torch.nn.ModuleList()
        self.app_linear_list = torch.nn.ModuleList()
